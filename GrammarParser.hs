@@ -23,16 +23,15 @@ data Name = Gen Int | User String
 
 
 defs = haskellDef {
-  P.reservedNames = ["fun","in","let","lam","type_interpretations" ,"signatures" ,"?"  , "*" ],
+  P.reservedNames = ["let","type_interpretations" ,"signatures" ,"?"  , "*" ],
   P.reservedOpNames = ["->","::" , ":" , "," , ":::" , "=>","=",".","/\\","\\/"]
 }
 
 
 
-fromRight (Right x) = x
-
 type TypeInterpretation = Map.Map Type [Type]
 
+qparse parser input = fromRight $ parse parser "" input
 
 
 grammar = do 
@@ -42,21 +41,21 @@ grammar = do
   ; typeMappings <- type_interpretations
   ; lines
   ; signs <- many1 signline
-  ; return (Grammar sigNames typeMappings signs)
-  }
+  ; return (Grammar sigNames (Map.unions typeMappings) signs)
+  } <?> "grammar"
 
 
 signatures = do 
   { reserved "signatures"  ; optional spaces
   ; (abstract,concretes) <- abstract_concrete capitalized
   ; return (abstract,concretes)
-  } <?> "signature names"
+  } <?> "a list of signature definitions, each on a single line"
 
 capitalized = do { u <- upper ; l <- many1 lower ; return (u:l) } <?> "capitalized"
     
 
 type_mapping = do 
-  (abstract,concretes) <- abstract_concrete typ
+  (abstract,concretes) <- abstract_concrete' basictype typ
   return (Map.singleton abstract concretes)
 
 
@@ -64,8 +63,8 @@ type_interpretations = do
   { reserved "type_interpretations"
   ; reservedOp "=" 
   ; mappings <- ( parseList (char '[' .>. ospaces) type_mapping  (freely2 comma) (freely2 $ char ']') )
-  ; return mappings 
-  }
+  ; return  mappings 
+  } <?> "a type interpreation function definitions, of the form  [ 'abstract1' -> 'concrete1' , 'abstract2' -> concrete2' ]"
   
   
 freely x = ospaces .>. x .>. ospaces
@@ -77,7 +76,7 @@ f .>. g = do { f ; g  ; return []}
   
 ospaces = optional spaces  
 
-
+-- combinator to parse stuff like  content1 = < content2 .... >
 abstract_concrete p = do 
   a <- p
   optional spaces
@@ -85,7 +84,14 @@ abstract_concrete p = do
   optional spaces
   c <- tuple p
   return (a,c)
-
+  
+abstract_concrete' q p = do 
+  a <- q
+  optional spaces
+  reservedOp "="
+  optional spaces
+  c <- tuple p
+  return (a,c)
 
 
 
@@ -105,6 +111,8 @@ basictype = liftM Atom identifier
 basicterm = omitted <|> con  <|> liftM Var identifier
 
 
+
+-- Parsing lambda terms
 omitted = do 
   reserved "*"
   return Nil
@@ -120,7 +128,7 @@ lam = do
   return (Lam var term)
   
 con = do
-   x <- many1 $ oneOf "QWETYUIOPASDFGHJKLZXCVBNM'" 
+   x <- many1 $ oneOf "QWERTYUIOPASDFGHJKLZXCVBNM'" 
    spaces
    string "::"
    spaces
@@ -176,7 +184,7 @@ signline =
 eol :: GenParser Char st Char
 eol = char '\n'
 
-run p x = parse p "" x
+
 
 typ :: Parser Type
 typ    = buildExpressionParser typetable simpletype
@@ -208,8 +216,8 @@ termtable   = [ --[prefix "-" negate, prefix "+" id ]
 --          , [binary "+" (+) AssocLeft, binary "-" (-)   AssocLeft ]
           ]    
           
-binary  name fun assoc = Infix (do{ reservedOp name; return fun }) assoc
-prefix  name fun       = Prefix (do{ reservedOp name; return fun })
+binary  name fun assoc = Infix   (do{ reservedOp name; return fun }) assoc
+prefix  name fun       = Prefix  (do{ reservedOp name; return fun })
 postfix name fun       = Postfix (do{ reservedOp name; return fun })
 
 

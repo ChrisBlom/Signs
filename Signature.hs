@@ -18,7 +18,7 @@ sparens a = "(" ++ a ++ ")"
 data Sign = Sign { abstract :: Term , concretes :: [Term] } deriving Eq
 
 
-showTuple a b = concat [show a, " = " ,"<" ,concatMap show b,">"]
+showTuple a b = concat [show a, " = " ,"<" ,concat $ intersperse ","$ map show $ b,">"]
 
 instance Show Sign where
   show s = showTuple (abstract s) (concretes s)
@@ -50,7 +50,7 @@ data Type
   | Option (Type)
   | Unit
   | Void
-  
+  deriving (Ord)
 
 atomicType typ = case typ of
   Atom _  -> True
@@ -81,7 +81,7 @@ data Term
   | Nil
   | NotNil (Term)
   | CaseO (Term) (Term) (Term)
-
+  deriving Ord
 
   
 -- unique homomorphic extender over terms for functions that operate on constants
