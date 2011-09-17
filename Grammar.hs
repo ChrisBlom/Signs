@@ -1,6 +1,9 @@
 module Grammar where
 
-import Signature
+import Sign
+import Term
+import Parse
+import Type
 import Inference
 import Reductions
 import qualified Data.Map as Map
@@ -8,6 +11,7 @@ import Data.List
 import Data.Maybe
 import Control.Monad
 import Control.Monad.Error
+import Data.Either
 
 data Grammar = Grammar 
   { signatureNames :: (SigName,[SigName])
@@ -16,44 +20,75 @@ data Grammar = Grammar
   }
 
 type SigName = String  
-type Sig a = (a,SigName)  
+type Sig a = (a,SigName)
   
 isRight (Right _) = True
 isRight _ = False
   
-  
 
-fromRight (Right x) = x
-fromRight x = error $ "illegal fromRight " ++ show x
-    
-  
-type ErrorMessage = String  
-type InfoMessage = String  
+
+type MyError a = Either ErrorMessage a
+
+type ErrorMessage = String
+type InfoMessage = String
+
+
+--getAbstractConstant :: Grammar -> String -> Either ErrorMessage Term
+getSign name g = case find ( (==name) . constantName . abstract) (signs g) of
+  Just con -> Right con
+  Nothing  -> Left $ "could not find " ++ name
+
+
+--abstractTermToSign :: Term -> Grammar -> MyError Sign
+abstractTermToSign term grammar = let concretesE = map (\sig -> termHomomorphism grammar sig term) ( snd $ signatureNames grammar) in
+  if all isRight concretesE
+    then   Right $ Sign { abstract = term
+            , concretes = map fromRight concretesE
+            }
+
+    else Left $ unlines $ nub $ lefts concretesE
+
+
+
+
+
 
 
 interpret :: Grammar -> SigName -> Term -> Either ErrorMessage Term
 interpret grammar conSig absTerm = termMapping grammar conSig absTerm
 
-  
+
 unifiable :: Type -> Type -> Either ErrorMessage InfoMessage
 unifiable typeA typeB = let subst = typeA `mgu` typeB in
-  if  validSubst subst 
+  if  validSubst subst
     then Right $ "correctly typed"
-    else Left $ concat ["could not unify ",show typeA," with ",show typeB]
- 
+    else Left $ concat ["could not unify ",show typeA," with expected type ",show typeB]
+
+
+(f .|. g) x = case x of
+  Left  x' -> Left  (f x')
+  Right x' -> Right (g x')
+
+left  f = (f .|. id)
+right f = (id .|. f)
+
 
 typeCheck grammar constant concreteSig = let
   concreteTerm  = termHomomorphism grammar concreteSig constant
   concreteTypeA = typeHomomorphism grammar concreteSig (typeOf constant)
-  in if isJust concreteTypeA && isRight concreteTerm 
-   then let concreteTypeB = typeOf $ fromRight concreteTerm in  unifiable concreteTypeB (fromJust concreteTypeA)
-   else 
-    Right $ "missing term in " ++ show constant
+  in if isJust concreteTypeA && isRight concreteTerm
+   then let concreteTypeB = typeOf $ fromRight concreteTerm in
+    (\x -> "typing error in abstract constant " ++ show constant ++"\n\t : "++x ++ " in "++ show concreteSig )
+    .|.
+    (\x -> (show constant) ++" is "++ x ++ " for the "++ concreteSig ++ " component.")
+    $ unifiable concreteTypeB (fromJust concreteTypeA)
+   else
+    Left $ "missing "++ concreteSig ++" term in " ++ show constant
 
 
-typeCheckTerm grammar constant =  
+typeCheckTerm grammar constant =
   map (typeCheck grammar constant) (getConcreteSigs grammar)
-  
+
 
 typeCheckSigns grammar = map (typeCheckTerm grammar) (map abstract $ signs grammar)
 
@@ -63,10 +98,10 @@ typeCheckSigns grammar = map (typeCheckTerm grammar) (map abstract $ signs gramm
   
 
 signListToTermMap :: [Sign] -> Map.Map Term [Term]
-signListToTermMap = foldr (\sign map -> Map.insert (abstract sign) (concretes sign) map) Map.empty 
+signListToTermMap = foldr (\sign map -> Map.insert (abstract sign) (concretes sign) map) Map.empty
 
 ofSig :: SigName -> Sig a -> Bool
-ofSig name sigged = (snd sigged) == name 
+ofSig name sigged = (snd sigged) == name
 
 -- selectSig :: SigName -> [Sig a] -> Maybe (Sig a) 
 selectSig name list = listToMaybe $ filter (ofSig name) list
@@ -78,7 +113,7 @@ assignSig sig a  = (a,sig)
 dropSig = fst
   
 assignSigs = zipWith assignSig
-  
+
 assignAbstract grammar  = assignSig  (getAbstractSig grammar)
 assignConcretes grammar = assignSigs (getConcreteSigs grammar) 
 
@@ -95,7 +130,7 @@ sigedTypeMappings g
   (typemappings g)
  
 sigedTermMappings :: Grammar -> Map.Map (Sig Term) [Sig Term] 
-sigedTermMappings g 
+sigedTermMappings g
   = Map.map     (assignConcretes g)
   $ Map.mapKeys (assignAbstract g) 
   (signListToTermMap $ signs g)
@@ -107,16 +142,26 @@ typeMapping grammar@g targetSig sourceType = let abstract = getAbstractSig gramm
   ; liftM dropSig $ selectSig targetSig concreteTypes
   }
   
-  
+typeMapping' grammar@g targetSig sourceType = let
+  abstract = getAbstractSig grammar
+  concreteTypes = Map.lookup (assignAbstract g sourceType) (sigedTypeMappings g)
+  in case concreteTypes of
+    Just types -> liftM  dropSig $  fromJust' (selectSig targetSig types) targetSig
+    Nothing -> Left $ "could not find : " ++ show sourceType
+  where fromJust' x z = case x of { Just y -> Right y ; Nothing -> Left $ "could not find " ++ show z }
+
+
+
 termMapping :: Grammar -> SigName -> Term -> Either ErrorMessage Term
 
-termMapping grammar@g targetSig sourceTerm = let 
-  abstract = getAbstractSig grammar 
-  concreteTerms = Map.lookup (assignAbstract g sourceTerm) (sigedTermMappings g) 
-  in case concreteTerms of 
-    Just terms -> Right $ dropSig $fromJust $ selectSig targetSig terms
-    Nothing -> Left "ohoh"
-  
+termMapping grammar@g targetSig sourceTerm = let
+  abstract = getAbstractSig grammar
+  concreteTerms = Map.lookup (assignAbstract g sourceTerm) (sigedTermMappings g)
+  in case concreteTerms of
+    Just terms -> liftM dropSig $ fromJust' (selectSig targetSig terms) targetSig
+    Nothing -> Left $ "could not find : " ++ show sourceTerm
+  where fromJust' x z = case x of { Just y -> Right y ; Nothing -> Left $ "could not find " ++ show z }
+
   
 typeHomomorphism grammar targetSig sourceType=  let tmap = typeHomomorphism grammar targetSig in
  case sourceType of
@@ -129,7 +174,7 @@ typeHomomorphism grammar targetSig sourceType=  let tmap = typeHomomorphism gram
   Unit        -> return Unit
   Void        -> return Void
 
-
+termHomomorphism :: Grammar -> SigName -> Term -> MyError Term
 termHomomorphism grammar targetSig sourceTerm =  let cmap' = termHomomorphism grammar targetSig in
  case sourceTerm  of
   constant@(Con c t) -> (termMapping grammar targetSig) constant

@@ -1,8 +1,11 @@
 module GrammarParser where
-import Signature
+
+import Sign
 
 import Inference
 import Grammar
+import Type
+import Parse
 import Prelude hiding (lines)
 import Text.ParserCombinators.Parsec hiding ((<|>))
 import System.IO.Unsafe
@@ -15,17 +18,9 @@ import Control.Monad(liftM)
 
 import qualified Data.Map as Map
 
-import qualified Text.ParserCombinators.Parsec.Token as P
 
 
-data Name = Gen Int | User String
-  deriving (Eq,Show)
 
-
-defs = haskellDef {
-  P.reservedNames = ["let","type_interpretations" ,"signatures" ,"?"  , "*" ],
-  P.reservedOpNames = ["->","::" , ":" , "," , ":::" , "=>","=",".","/\\","\\/"]
-}
 
 
 
@@ -54,12 +49,12 @@ signatures = do
 capitalized = do { u <- upper ; l <- many1 lower ; return (u:l) } <?> "capitalized"
     
 
-type_mapping = do 
-  (abstract,concretes) <- abstract_concrete' basictype typ
+type_mapping = do
+  (abstract,concretes) <- abstract_concrete' atom (parseDef :: Parser Type)
   return (Map.singleton abstract concretes)
 
 
-type_interpretations = do 
+type_interpretations = do
   { reserved "type_interpretations"
   ; reservedOp "=" 
   ; mappings <- ( parseList (char '[' .>. ospaces) type_mapping  (freely2 comma) (freely2 $ char ']') )
@@ -73,110 +68,17 @@ freely2 x = ws .>. x .>. ws where
   ws = many (space <|> char '\n')
   
 f .>. g = do { f ; g  ; return []}
-  
-ospaces = optional spaces  
 
--- combinator to parse stuff like  content1 = < content2 .... >
-abstract_concrete p = do 
-  a <- p
-  optional spaces
-  reservedOp "="
-  optional spaces
-  c <- tuple p
-  return (a,c)
-  
-abstract_concrete' q p = do 
-  a <- q
-  optional spaces
-  reservedOp "="
-  optional spaces
-  c <- tuple p
-  return (a,c)
+ospaces = optional spaces
 
 
 
-lexer = P.makeTokenParser defs
 
-parens      = P.parens lexer
-identifier  = P.identifier lexer
-reserved    = P.reserved lexer
-reservedOp  = P.reservedOp lexer
-angles      = P.angles lexer
-comma       = P.comma lexer
-
-
-basictype = liftM Atom identifier
-
-
-basicterm = omitted <|> con  <|> liftM Var identifier
-
-
-
--- Parsing lambda terms
-omitted = do 
-  reserved "*"
-  return Nil
-
-lam = do 
-  string "\\"
-  spaces
-  var <- many1 $ noneOf "\\.=>-()@, " 
-  spaces
-  string "."
-  spaces
-  term <- term
-  return (Lam var term)
-  
-con = do
-   x <- many1 $ oneOf "QWERTYUIOPASDFGHJKLZXCVBNM'" 
-   spaces
-   string "::"
-   spaces
-   typ <- typ
-   return (Con x typ)
- 
-
-
-sign = do 
-  { abscon <- con 
-  ; reservedOp "="
-  ; conc <- parseList (string "<") term (reservedOp ",") (string ">")
-  ; return (Sign abscon conc) 
-  }
-
-
-  
-  
-tuple p = parseList (string "<") p (reservedOp ",") (string ">")  
-  
-  
-
-parseList start elem sep end = do 
-  start
-  content <- parseCons elem sep  
-  end  
-  return content
-
-
--- Build up a list of cells.  Try to parse the first cell, then figure out 
--- what ends the cell.
-
-parseCons elem sep = 
-    do first <- elem
-       next <- parseNext elem sep 
-       return (first : next)
-
--- The cell either ends with a comma, indicating that 1 or more cells follow,
--- or it doesn't, indicating that we're at the end of the cells for this line
-
-parseNext elem sep =
-    (sep >> parseCons elem sep )            -- Found comma?  More cells coming
-    <|> (return [])                -- No comma?  Return [], no more cells
 
 
 lines = many (eol <|> space)
-signline = 
-    do result <- sign
+signline =
+    do result <- (parseDef :: Parser Sign)
        eol                       -- end of line
        return result
 
@@ -186,38 +88,5 @@ eol = char '\n'
 
 
 
-typ :: Parser Type
-typ    = buildExpressionParser typetable simpletype
-          <?> "expression"
-
-simpletype =  parens typ 
-          <|> basictype
-          <?> "simple expression"
-
-typetable = [ --[prefix "-" negate, prefix "+" id ]
-             [postfix "?" (Option)]
-           , [binary "->" (:->) AssocRight  {-, binary "/" (div) AssocLeft-} ]
---         , [binary "+" (+) AssocLeft, binary "-" (-)   AssocLeft ]
-           ]
-          
-          
-term   = buildExpressionParser termtable simpleterm
-      <?> "expression"
-
-simpleterm =  parens term 
-          <|> basicterm
-          <|> lam
-
-          <?> "simple expression"
-
-termtable   = [ --[prefix "-" negate, prefix "+" id ]
-           [postfix "^" (NotNil)]
-          , [binary "@" (App) AssocLeft  {-, binary "/" (div) AssocLeft-} ]
---          , [binary "+" (+) AssocLeft, binary "-" (-)   AssocLeft ]
-          ]    
-          
-binary  name fun assoc = Infix   (do{ reservedOp name; return fun }) assoc
-prefix  name fun       = Prefix  (do{ reservedOp name; return fun })
-postfix name fun       = Postfix (do{ reservedOp name; return fun })
 
 

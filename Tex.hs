@@ -1,4 +1,4 @@
-module Tex where
+module Tex (tex,text,hcat,vcat,hsep,Tex,parens) where
 
 import Text.PrettyPrint.HughesPJ 
 import Data.List

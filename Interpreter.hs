@@ -2,11 +2,16 @@ module Interpreter where
 
 import Control.Monad.State
 import Control.Monad
-import Signature
+
+
+import Term
+import Type
+import Parse
 import Grammar
 import GrammarParser
-import Data.Maybe
 import Inference
+
+import Data.Maybe
 import System.IO
 import System.IO.Unsafe
 import Data.List
@@ -16,7 +21,6 @@ import Text.ParserCombinators.Parsec hiding ((<|>))
 commands
 
 load "file.grammar"
-
 
 
 
@@ -82,9 +86,13 @@ getFileContent file = do { i <- openFile file ReadMode ; c <- hGetContents i ; r
 loadThenParse :: InterpreterState -> FilePath -> IO InterpreterState
 loadThenParse state file = (getFileContent file) >>= (parseFile file state)
 
-test = unsafePerformIO $ liftM (fromJust . active_grammar) $ loadThenParse startState "optional.signs"
-test2 = unsafePerformIO $ liftM (fromJust . active_grammar) $ loadThenParse startState "optional3.signs"  
-  
+test x = liftM (fromJust . active_grammar) $ loadThenParse startState (x ++ ".signs")
+
+
+check x = do 
+  grammar <- test "optional"
+  (mapM_ putStrLn $ concat $  (map.map) (either ("fail: "++) ("pass: "++)) $ typeCheckSigns $ grammar)
+
   
 helpmenu = (concat 
   [ "Commands : "

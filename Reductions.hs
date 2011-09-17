@@ -1,4 +1,4 @@
-module Reductions (Signature, reduce) where
+module Reductions (reduce) where
 
 {- In the Reductions module the various reduction operations for terms are defined
    
@@ -15,7 +15,7 @@ module Reductions (Signature, reduce) where
    are also defined here.
  -}
  
-import Signature
+import Term
 import Data.List 
 import Prelude hiding ((^))
 import qualified Data.Foldable as Fold

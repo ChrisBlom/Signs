@@ -1,6 +1,5 @@
 module Inference
-( Signature
-, TI
+( TI
 , Subst
 , typeOf
 , mgu
@@ -24,7 +23,8 @@ Based on descriptions and code found in:
 -}
 
 import Tex
-import Signature
+import Term
+import Type
 import Prelude hiding ((^))
 
 import qualified Data.Map as Map
@@ -37,24 +37,20 @@ import Control.Monad.Reader
 import Control.Monad.State
 
 
-data Test = Test
-
-
-
 
 validSubst result = unsafePerformIO $ do
   (x,state) <- runTI result
-  return ( case x of Right _ -> True ; Left err -> False ) 
+  return ( case x of Right _ -> True ; Left err -> False )
 
-    
 
-term0 :: Term     
+
+term0 :: Term
 term0 = Con "testB" (Atom "X")
- 
-term1 :: Term   
-term1 = Con "TestA" (Atom "Y")  
- 
-term2 = Pair (Con "TestA" (Atom "X") ) (Con "TestB" (Atom "Y"))     
+
+term1 :: Term
+term1 = Con "TestA" (Atom "Y")
+
+term2 = Pair (Con "TestA" (Atom "X") ) (Con "TestB" (Atom "Y"))
 
 term3 = Lam "x" (App term1 (Var "x"))
 
