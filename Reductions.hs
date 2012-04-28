@@ -16,6 +16,7 @@ module Reductions (reduce) where
  -}
  
 import Term
+
 import Data.List 
 import Prelude hiding ((^))
 import qualified Data.Foldable as Fold
@@ -101,7 +102,7 @@ subst old new term = let subst' = subst old new in case term of
   Var v      | (v == old) -> new
   Var v      | (v /= old) -> Var v
   Lam x m | x == old -> Lam x m
-  Lam y m | y /= old && not (y `elem` free new) -> Lam y (subst old new m)
+  Lam y m | y /= old && y `notElem` free new -> Lam y (subst old new m)
   Lam y m | old /= y && y `elem` free new ->
       Lam y' (subst y (Var y') $ (rename y y' m)) where
         y' = head $ fresh $ free term 
@@ -125,7 +126,7 @@ projection_reduce t = case t of
   (Fst (Pair l r))      -> l
   (Snd (Pair l r))      -> r
 
-  (Fst x)       	      -> Fst   (projection_reduce x)
+  (Fst x)                -> Fst   (projection_reduce x)
   (Snd x)       	      -> Snd   (projection_reduce x)
   (Pair m n)            -> Pair  (projection_reduce m) (projection_reduce n)
   (App  m n)            -> App   (projection_reduce m) (projection_reduce n)
@@ -196,4 +197,3 @@ beta_reduce term = case term of
   t@(Con c x)              -> t
   (Case  o f d)         -> Case  (beta_reduce o) (beta_reduce f) (beta_reduce d)  
   (CaseO o f d)         -> CaseO (beta_reduce o) (beta_reduce f) (beta_reduce d) 
-
