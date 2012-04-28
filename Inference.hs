@@ -1,15 +1,15 @@
 module Inference
 ( TI
 , Subst
-, typeOf
+-- , typeOf
+, typeOfE
 , mgu
 , disp
 , validSubst
 ) where
 
 {- 
-AlgorithW type inference algorithm, adapted for ACG terms
-and extended for option types
+AlgorithW type inference algorithm, adapted for ACG and extended for option, product and sum types
 
 Based on descriptions and code found in:
 
@@ -27,6 +27,7 @@ import Term
 import Type
 import Prelude hiding ((^))
 
+import Data.List
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
@@ -36,23 +37,42 @@ import Control.Monad.Error
 import Control.Monad.Reader
 import Control.Monad.State
 
-
+unifiable a b = validSubst $ a `mgu` b 
 
 validSubst result = unsafePerformIO $ do
   (x,state) <- runTI result
   return ( case x of Right _ -> True ; Left err -> False )
 
+{-
+typeOf e = unsafePerformIO $ do 
+ (x,state) <- runTI (typeInference Map.empty e) 
+ return ( case x of Right typ -> typ ; Left err -> error $ err ++ " in " ++ show e ) 
+ -}
 
+typeOfE e = unsafePerformIO $ do 
+ (x,state) <- runTI (typeInference Map.empty e) 
+ return x 
+ 
+safetypeOfE e = unsafePerformIO $ do 
+ (x,state) <- runTI (typeInference Map.empty e) 
+ return x  
+ 
+ 
+disp e = do 
+ (x,state) <- runTI e
+ return ( case x of Right typ -> typ ; Left err -> error err ) 
 
 term0 :: Term
 term0 = Con "testB" (Atom "X")
 
 term1 :: Term
-term1 = Con "TestA" (Atom "Y")
+term1 = Con "TestA" (Atom "A")
 
 term2 = Pair (Con "TestA" (Atom "X") ) (Con "TestB" (Atom "Y"))
 
-term3 = Lam "x" (App term1 (Var "x"))
+term3 = Lam "x" (App (Var "x") term1 )
+
+termF = Lam "x" ( (App term1 (Var "x") ))
 
 term4 :: Term
 term4 =  Lam "f" $ Lam "g" $ Lam "x" $ App (Var "f") $ App (Var "g") (Var "x")
@@ -61,13 +81,14 @@ term4 =  Lam "f" $ Lam "g" $ Lam "x" $ App (Var "f") $ App (Var "g") (Var "x")
 data Scheme =  Scheme [Variable] (Type)
 
 -- Substitutions : mapping from variables to signatures
-type Subst sig = Map.Map Variable (Type)
+type Subst = Map.Map Variable (Type)
 
-newtype TypeEnv sig = TypeEnv (Map.Map String (Scheme))
+-- | Type enviroments
+newtype TypeEnv = TypeEnv (Map.Map String (Scheme))
 
 class Types a  where
     ftv    ::  a -> Set.Set String
-    doSub  ::  Subst sig -> a  -> a 
+    doSub  ::  Subst -> a  -> a 
 
 instance  Types Type where
     ftv (TVar n)      =  Set.singleton n
@@ -76,6 +97,7 @@ instance  Types Type where
     ftv (t1 :*: t2)   =  ftv t1 `Set.union` ftv t2  
     ftv (t1 :+: t2)   =  ftv t1 `Set.union` ftv t2      
     ftv (Option t1)   =  ftv t1
+    ftv (Marker t1 _)   =  ftv t1    
 
     doSub s (TVar n)  =  case Map.lookup n s of
                                Nothing  -> TVar n
@@ -83,6 +105,7 @@ instance  Types Type where
     doSub s (t1 :-> t2)  = (doSub s t1) :-> (doSub s t2)
     doSub s (t1 :*: t2)  = (doSub s t1) :*: (doSub s t2)    
     doSub s (Option t1)  = Option (doSub s t1) 
+    doSub s (Marker t1 str )  = Marker (doSub s t1) str
     doSub s (Atom a)     = Atom a      
     doSub s x            = error $ "missing case in doSub for " ++ show x
 
@@ -92,109 +115,130 @@ instance Types Scheme  where
     doSub s (Scheme vars t)  =  Scheme vars (doSub (foldr Map.delete s vars) t)
 
 -- empty 
-nullSubst  ::  Subst sig
+nullSubst  ::  Subst 
 nullSubst  =   Map.empty
 
 -- composition of substitutions
-composeSubst         :: Subst sig -> Subst sig -> Subst sig
+composeSubst         :: Subst  -> Subst  -> Subst 
 composeSubst s1 s2   = (Map.map (doSub s1) s2) `Map.union` s1
 
 
-remove                    ::  TypeEnv sig -> Variable -> TypeEnv sig
+
+
+remove                    ::  TypeEnv -> Variable -> TypeEnv
 remove (TypeEnv env) var  =  TypeEnv (Map.delete var env)
 
-instance Types (TypeEnv s ) where
+instance Types (TypeEnv  ) where
     ftv (TypeEnv env)      =   foldr Set.union Set.empty (map ftv (Map.elems env) )
     doSub s (TypeEnv env)  =  TypeEnv (Map.map (doSub s) env)
 
-generalize        :: TypeEnv sig -> (Type) -> Scheme
+generalize        :: TypeEnv  -> (Type) -> Scheme
 generalize env t  =   Scheme vars t
   where vars = Set.toList ((ftv t) `Set.difference` (ftv env))
 
-data TIEnv = TIEnv  {}
 
-data TIState sig  = TIState 
-  { tiSupply :: Int
-  , tiSubst  :: Subst sig
+data TIEnv = TIEnv 
+
+-- | data type for Type Inference state (variable bookkeeping and substitution)
+data TIState = TIState 
+  { --tiSupply :: Int,
+    tiUsed   :: [Variable]
+  , tiSubst  :: Subst
   }
 
-type TI a sig = ErrorT String (ReaderT TIEnv (StateT (TIState sig) IO)) a
+initTIState :: TIState
+initTIState = TIState {tiUsed = [] , tiSubst = Map.empty}
 
-runTI :: TI a sig -> IO (Either String a, (TIState sig))
-runTI t = 
-    do (res, st) <- runStateT (runReaderT (runErrorT t) initTIEnv) initTIState
+
+
+type TI a  = ErrorT String (ReaderT TIEnv (StateT (TIState ) IO)) a
+
+
+runTI :: TI a  -> IO (Either String a, (TIState ))
+runTI ti = 
+    do (res, st) <- runStateT (runReaderT (runErrorT ti) initTIEnv) initTIState
        return (res, st)
   where initTIEnv = TIEnv{}
-        initTIState = TIState{tiSupply = 0,
-                              tiSubst = Map.empty}
 
-newTyVar :: Variable -> TI (Type) sig
+
+-- | get a fresh variable
+newTyVar :: String -> TI Type
 newTyVar prefix =
     do  s <- get
-        put s{tiSupply = tiSupply s + 1}
-        return (TVar  (prefix ++"_" ++ show (tiSupply s)))
+        let freshVar = head $ (map (:[]) ['a'..]) \\ (tiUsed s)    
+        put $ s { tiUsed = freshVar : (tiUsed s) } 
+        return (TVar freshVar)
    
 
-instantiate :: Scheme -> TI ((Type) ) sig
+failer :: TI Subst
+failer = return nullSubst
+
+
+
+instantiate :: Scheme -> TI Type
 instantiate (Scheme vars t) = do
-  nvars <- mapM (\ _ -> newTyVar "a") vars
+  nvars <- mapM (\ _ -> newTyVar "z") vars
   let s = Map.fromList (zip vars nvars)
   return $ doSub s t
 
 
 -- returns the most general unifier of two types
-mgu :: (Type) -> (Type) -> TI (Subst sig) sig
+mgu :: (Type) -> (Type) -> TI (Subst ) 
+a .=. b = mgu a b
 
 -- functions
 mgu (l :-> r) (l' :-> r')  =  do  
-  s1 <- mgu l l'
-  s2 <- mgu (doSub s1 r) (doSub s1 r')
+  s1 <- l .=. l'
+  s2 <- (doSub s1 r) .=. (doSub s1 r')
   return (s1 `composeSubst` s2)
 -- tuples  
 mgu (l :*: r) (l' :*: r')  =  do  
-  s1 <- mgu l l'
-  s2 <- mgu (doSub s1 r) (doSub s1 r')
+  s1 <- l .=. l'
+  s2 <- (doSub s1 r) .=. (doSub s1 r')
   return (s1 `composeSubst` s2)
-  
+
 -- tuples  
-mgu (Option l) (Option l')  =  do  
-  s1 <- mgu l l'
-  return (s1 )  
-  
+mgu (Option l) (Option l')  =  l .=. l'
+-- marked types
+mgu (Marker l m) (Marker l' m' )  | m == m' =  l .=. l'
+mgu (Marker l m) ( l' )   =  l .=. l'
+mgu ( l' ) (Marker l m)   =  l .=. l'
+-- vars 
 mgu (TVar u) t               =  varBind u t
 mgu t (TVar u)               =  varBind u t
-mgu (Atom _) (Atom _)        =  return nullSubst
-mgu t1 t2                    =  throwError $ "types do not unify: \n expected \t: "  ++ show t1  ++
-                                " \n but got \t: "  ++  show t2 ++ "\n"
+-- atoms
+mgu (Atom x) (Atom y) | x == y  =  return nullSubst
 
-varBind :: Variable -> (Type) -> TI (Subst sig) sig
+-- fail: 
+mgu t1 t2                    =  (throwError $ "types do not unify: \n expected \t: "  ++ show t1  ++
+                                " \n but got \t: "  ++  show t2 ++ "\n") 
+
+varBind :: Variable -> (Type) -> TI Subst
 varBind u t  | t == TVar u           =  return nullSubst
              | u `Set.member` ftv t  =  throwError $ "occur check fails: " ++ u ++
                                          " vs. "  ++ show t
              | otherwise             =  return (Map.singleton u t)
 
-tiLit :: TypeEnv sig -> Term -> TI (Subst sig, (Type)) sig
+tiLit :: TypeEnv -> Term -> TI (Subst,Type) 
 tiLit _ (Con a t)   =  return (nullSubst, t)
 
 
-
-
-ti :: TypeEnv sig -> (Term) -> TI (Subst sig, (Type)) sig
+ti :: TypeEnv -> (Term) -> TI (Subst, Type)
 ti (TypeEnv env) (Var n) = 
     case Map.lookup n env of
-       Nothing     ->  throwError $ "unbound variable: " ++ n
+       Nothing     ->  (throwError $ "Inference.ti : unbound variable: " ++ n) 
        Just sigma  ->  do  t <- instantiate sigma
                            return (nullSubst, t) 
 ti env (Con l t) = tiLit env (Con l t)  
 ti env (Lam n e) =
-    do  tv <- newTyVar "a"
+    do  tv <- newTyVar "z"
         let TypeEnv env' = remove env n
             env'' = TypeEnv (env' `Map.union` (Map.singleton n (Scheme [] tv)))
         (s1, t1) <- ti env'' e
         return (s1, (:->) (doSub s1 tv) t1)
 
 ti env (App fun arg) = do
-  tv <- newTyVar "a"
+  tv <- newTyVar "z"
   (s1, t1) <- ti env fun
   (s2, t2) <- ti (doSub s1 env) arg
   s3 <- mgu (doSub s2 t1) (t2 :-> tv)
@@ -207,16 +251,16 @@ ti env (Pair e1 e2) = do
 
 
 ti env (Fst e1) = do
-  a <- newTyVar "a"
-  b <- newTyVar "b"
+  a <- newTyVar "z"
+  b <- newTyVar "y"
   (s1,t) <- ti env e1
   s2 <- mgu t (a :*: b)
   return (s2 `composeSubst` s1 , case doSub s2 t of (x :*: y) -> x )
 
 
 ti env (Snd e1) = do
-  a <- newTyVar "a"
-  b <- newTyVar "b"
+  a <- newTyVar "z"
+  b <- newTyVar "y"
   (s1,t) <- ti env e1
   s2 <- mgu t (a :*: b)
   return (s2 `composeSubst` s1 , case doSub s2 t of (x :*: y) -> y )
@@ -235,6 +279,7 @@ ti env (NotNil inner) = do
   s3 <- mgu  (tv) (Option t1)
   return (s3 `composeSubst` s1, doSub s3 tv)
           
+          {-
 ti env (CaseO o f d) = do
   tA <- newTyVar "a"
   tB <- newTyVar "b"
@@ -248,29 +293,82 @@ ti env (CaseO o f d) = do
   s2 <- mgu (doSub s1 typeO) (doSub s1    (Option tA))
 
 
-  return (foldr1 composeSubst [s3,s1,s2] , doSub s2 typeD )          
+  return (foldr1 composeSubst [s1,s2,s3] , doSub s2 typeD )          
+          -}
           
-        
+         {-    
+ti env (CaseO o f d) = do
+  tA <- newTyVar "a"
+  tB <- newTyVar "b"
+
+
+
+  (so, to) <- ti env o
+  (sf, tf) <- ti env f
+  (sd, td) <- ti env d
+    
+  let subs = foldr1 composeSubst [sd,sf,so] 
+    
+  so' <- to `mgu` (doSub subs $ Option tA)
+  sf' <- tf `mgu` (doSub so'  $ tA :-> tB)
+  sd' <- td `mgu` (doSub sf' $ tB)  
+    
+  return ( sd  , doSub sd' tB)
+-}
+          
+          
+
+ti env (CaseO o f d) = do
+  tA <- newTyVar "z"
+  tB <- newTyVar "y"
+
+  (subO, typO) <- ti env o
+  subO' <- (doSub subO typO) `mgu`  (Option tA)
+  
+  (subF, typF) <- ti env f
+  subF' <- (doSub subF typF) `mgu`  (tA :-> tB)
+  
+  (subD, typD) <- ti env d
+  subD' <- (doSub subD typD) `mgu`  (tB)
+  
+  return ( subD' `composeSubst`  subF' `composeSubst`  subO' , tB)
+
+                    
+          
 ti _ x = error$ "missing case in ti for " ++ show x
 
-typeInference ::  Map.Map Variable (Scheme) -> Term -> TI (Type) sig
+testO = Lam "v" $ Lam "o" $ CaseO ( Var "o" ) (Lam "o'" $ Var "v" `App` Var "o'" ) ( Con "x" (Atom "e" :-> Atom "t") ) 
+
+exi =  Con "exists" ((Atom "e" :-> Atom "t"):-> Atom "t")
+
+testOo = Lam "o" $ Lam "f" $ Lam "d" $ CaseO ( Var "o" ) (Var "f") ( Var "d"  )
+testO2 
+  = Lam "v" 
+  $ Lam "o" 
+  $ Lam "s" 
+  $ Lam "e" 
+  $ CaseO ( Var "o") 
+          ( (Var "v")   )
+          ( Lam "e" $ Lam "s'" $ exi `App` ( Lam "o'" $ (Var "v") `App` (Var "o'") `App` (Var "s'") `App` (Var "e") ))  `App` (Var "s") `App` (Var "e")
+
+typeInference ::  Map.Map Variable (Scheme) -> Term -> TI (Type)
 typeInference env e =
     do  (s, t) <- ti (TypeEnv env) e
         return (doSub s t)        
         
         
 
-data Constraint sig 
+data Constraint 
   = CEquivalent (Type) (Type)
   | CExplicitInstance (Type) (Scheme)
   | CImplicitInstance (Type) (Set.Set Variable) (Type)
 
 
 
-type Assum sig = [(String,Type)]
-type CSet sig =  [Constraint sig]
+type Assum = [(String,Type)]
+type CSet =  [Constraint]
 
-bu :: Set.Set String -> (Term) -> TI (Assum sig, CSet sig, (Type)) sig
+bu :: Set.Set String -> (Term) -> TI (Assum, CSet, (Type)) 
 bu m (Var n) = do b <- newTyVar "b"
                   return ([(n, b)], [], b)
 bu m (Con ( a) t) = do 
@@ -307,12 +405,6 @@ test e =
           Right t   ->  putStrLn $ show e ++ " :: " ++ show t
           
 
-typeOf e = unsafePerformIO $ do 
- (x,state) <- runTI (typeInference Map.empty e) 
- return ( case x of Right typ -> typ ; Left err -> error $ err ++ " in " ++ show e ) 
- 
-disp e = do 
- (x,state) <- runTI e
- return ( case x of Right typ -> typ ; Left err -> error err ) 
+
           
                     
