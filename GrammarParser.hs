@@ -2,6 +2,7 @@ module GrammarParser where
 
 import Sign
 
+import Sentence
 import Inference
 import Grammar
 import Type
@@ -18,25 +19,25 @@ import Control.Monad(liftM)
 
 import qualified Data.Map as Map
 
-
-
-
-
-
-
 type TypeInterpretation = Map.Map Type [Type]
 
-qparse parser input = fromRight $ parse parser "" input
+instance Parse Grammar where parseDef = grammar
 
+-- load and parse a grammar file
+loadGrammar :: FilePath -> IO (Either ParseError Grammar)
+loadGrammar path = do
+  file <- readFile path  
+  return (parse grammar path file)
 
+-- grammar parser
 grammar = do 
-  { lines 
-  ; sigNames <- signatures
+  { sigNames <- signatures
   ; lines
   ; typeMappings <- type_interpretations
   ; lines
   ; signs <- many1 signline
-  ; return (Grammar sigNames (Map.unions typeMappings) signs)
+  ; lines
+  ; return (Grammar sigNames (Map.unions typeMappings) signs )
   } <?> "grammar"
 
 
@@ -57,7 +58,8 @@ type_mapping = do
 type_interpretations = do
   { reserved "type_interpretations"
   ; reservedOp "=" 
-  ; mappings <- ( parseList (char '[' .>. ospaces) type_mapping  (freely2 comma) (freely2 $ char ']') )
+  ; ws
+  ; mappings <- ( parseList (char '[' >> ws) type_mapping  (ws >> comma >> ws) (ws >> char ']') )
   ; return  mappings 
   } <?> "a type interpreation function definitions, of the form  [ 'abstract1' -> 'concrete1' , 'abstract2' -> concrete2' ]"
   
@@ -69,24 +71,13 @@ freely2 x = ws .>. x .>. ws where
   
 f .>. g = do { f ; g  ; return []}
 
-ospaces = optional spaces
-
-
-
-
+ospaces :: Parser String
+ospaces = many (space <|> char '\n')
 
 
 lines = many (eol <|> space)
 signline =
-    do result <- (parseDef :: Parser Sign)
+    do result <- (parseDef :: Parser Sign)   
+       many (char ' ')
        eol                       -- end of line
        return result
-
--- The end of line character is \n
-eol :: GenParser Char st Char
-eol = char '\n'
-
-
-
-
-
