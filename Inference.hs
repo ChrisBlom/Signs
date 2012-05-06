@@ -20,12 +20,16 @@ Based on descriptions and code found in:
   publisher={Citeseer}
 }
 
+
+TODO : avoid IO
 -}
 
 import Tex
 import Term
 import Type
 import Prelude hiding ((^))
+
+import Data.Functor.Identity
 
 import Data.List
 import qualified Data.Map as Map
@@ -39,28 +43,26 @@ import Control.Monad.State
 
 unifiable a b = validSubst $ a `mgu` b 
 
-validSubst result = unsafePerformIO $ do
-  (x,state) <- runTI result
-  return ( case x of Right _ -> True ; Left err -> False )
+validSubst result = let (x,state) = runTI result in
+  case x of 
+    Right _  -> True 
+    Left err -> False
 
-{-
-typeOf e = unsafePerformIO $ do 
- (x,state) <- runTI (typeInference Map.empty e) 
- return ( case x of Right typ -> typ ; Left err -> error $ err ++ " in " ++ show e ) 
- -}
 
-typeOfE e = unsafePerformIO $ do 
- (x,state) <- runTI (typeInference Map.empty e) 
- return x 
+typeOf e = let (x,state) = runTI (typeInference Map.empty e) in
+ case x of 
+    Right typ -> typ
+    Left err -> error $ err ++ " in " ++ show e 
+
+typeOfE e = fst $ runTI (typeInference Map.empty e) 
  
-safetypeOfE e = unsafePerformIO $ do 
- (x,state) <- runTI (typeInference Map.empty e) 
- return x  
- 
- 
-disp e = do 
- (x,state) <- runTI e
- return ( case x of Right typ -> typ ; Left err -> error err ) 
+safetypeOfE e = fst $ runTI (typeInference Map.empty e) 
+
+disp e = let (x,state) = runTI e in
+  case x of 
+    Right typ -> typ ; 
+    Left err -> error err;
+
 
 term0 :: Term
 term0 = Con "testB" (Atom "X")
@@ -71,6 +73,8 @@ term1 = Con "TestA" (Atom "A")
 term2 = Pair (Con "TestA" (Atom "X") ) (Con "TestB" (Atom "Y"))
 
 term3 = Lam "x" (App (Var "x") term1 )
+
+termF2 = Lam "x" (App (Var "x") (Var "x") )
 
 termF = Lam "x" ( (App term1 (Var "x") ))
 
@@ -151,13 +155,12 @@ initTIState = TIState {tiUsed = [] , tiSubst = Map.empty}
 
 
 
-type TI a  = ErrorT String (ReaderT TIEnv (StateT (TIState ) IO)) a
+type TI a  = ErrorT String (ReaderT TIEnv (StateT TIState Identity )) a
 
 
-runTI :: TI a  -> IO (Either String a, (TIState ))
-runTI ti = 
-    do (res, st) <- runStateT (runReaderT (runErrorT ti) initTIEnv) initTIState
-       return (res, st)
+runTI :: TI a  ->  (Either String a, TIState)
+runTI ti = runState (runReaderT (runErrorT ti) initTIEnv) initTIState
+----       return (res, st)
   where initTIEnv = TIEnv{}
 
 
@@ -397,11 +400,12 @@ removeAssum [] _ = []
 removeAssum ((n', _) : as) n | n == n' = removeAssum as n
 removeAssum (a:as) n = a : removeAssum as n
         
+        
 test :: (Term ) -> IO ()
 test e =
-    do  (res, _) <- runTI (typeInference Map.empty e)
+    do  let (res, _) = runTI (typeInference Map.empty e)
         case res of
-          Left err  ->  putStrLn $ "error: " ++ err
+          Left err  ->  putStrLn $ "error while inferring types: " ++ err
           Right t   ->  putStrLn $ show e ++ " :: " ++ show t
           
 
