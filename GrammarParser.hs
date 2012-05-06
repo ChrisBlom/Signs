@@ -1,8 +1,6 @@
 module GrammarParser where
 
 import Sign
-
-import Sentence
 import Inference
 import Grammar
 import Type
@@ -81,3 +79,4 @@ signline =
        many (char ' ')
        eol                       -- end of line
        return result
+

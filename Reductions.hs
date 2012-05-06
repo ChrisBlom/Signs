@@ -126,7 +126,7 @@ projection_reduce t = case t of
   (Fst (Pair l r))      -> l
   (Snd (Pair l r))      -> r
 
-  (Fst x)                -> Fst   (projection_reduce x)
+  (Fst x)       	      -> Fst   (projection_reduce x)
   (Snd x)       	      -> Snd   (projection_reduce x)
   (Pair m n)            -> Pair  (projection_reduce m) (projection_reduce n)
   (App  m n)            -> App   (projection_reduce m) (projection_reduce n)
@@ -197,3 +197,4 @@ beta_reduce term = case term of
   t@(Con c x)              -> t
   (Case  o f d)         -> Case  (beta_reduce o) (beta_reduce f) (beta_reduce d)  
   (CaseO o f d)         -> CaseO (beta_reduce o) (beta_reduce f) (beta_reduce d) 
+

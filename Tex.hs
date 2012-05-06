@@ -1,4 +1,5 @@
-module Tex (tex,text,hcat,vcat,hsep,Tex,parens) where
+{-# LANGUAGE FlexibleInstances #-}
+module Tex (tex,text,hcat,vcat,hsep,string2tex,Tex,parens,(<>),array,render,mathmode,enum,narray) where
 
 import Text.PrettyPrint.HughesPJ 
 import Data.List
@@ -14,8 +15,15 @@ instance Tex Char where
   tex '\'' = text "'"
   tex x = text [x]
 
-instance Tex String where
+instance Tex [Char] where
   tex x = hcat $ map tex x
+
+data Mode = Normal | Underline | Overline
+
+string2tex [] = empty
+string2tex ('_':t) = hcat [text "_",tex '{' ,string2tex t, tex '}']
+string2tex (h:t)   = tex h <> string2tex t
+
 
 
 mathmode x = tex "$" <> x <> tex "$"
@@ -29,6 +37,14 @@ item x = text "\\item " <>  x
 array :: [ [Doc] ] -> Doc
 array list = vcat $ 
   [hcat [text "\\begin{array}[t]{" ,tex $ take (foldr max 0 $ map length list) (repeat 'l') ,tex "}"]] 
+   ++ 
+   map arrayentry list 
+   ++ 
+   [text "\\end{array}"]
+   
+narray :: [ [Doc] ] -> Doc
+narray list = vcat $ 
+  [hcat [text "\\begin{array}[t]{" ,tex $ concat $ take (foldr max 0 $ map length list) (repeat "l@{}") ,tex "}"]] 
    ++ 
    map arrayentry list 
    ++ 

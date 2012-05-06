@@ -44,10 +44,12 @@ prettyPrintSignTex sign  = do
          typ = fromJust $ fromRight $ liftM (typeHomomorphism g sig) (typeOfE (abstract sign)) 
  let (stringTerm,stringTyp) = addType ( (concretes sign) !! 0 , 0)
  let (semTerm,semTyp)       = addType ( (concretes sign) !! 1 , 1)
- return $ array
-  [ [hcat [tex $ abstract sign, text " : ", (either tex (texStyle "ABSTRACT") ) (typeOfE $ abstract sign)]] 
-  , [ text "\\langle" , texTerm "STRING" stringTerm <> text " : " <> texStyle "STRING"  stringTyp  ]
-  , [ text ","        , texTerm "SEM" semTerm  <> text " : " <> texStyle "SEM"  semTyp        , text "\\rangle"  ] 
+ return $ mathmode $ array
+  [ [ hcat [tex $ abstract sign, text " : ", (either tex (texStyle "ABSTRACT") ) (typeOfE $ abstract sign) ,text " = " ]] 
+  , [narray [ [ text "\\langle" , tex " "  , texTerm "STRING" stringTerm , tex " : " <> texStyle "STRING"  stringTyp  ]
+            , [ text ","        , tex " "  , texTerm "SEM" semTerm       , tex " : " <> texStyle "SEM"  semTyp        , text "\\ \\rangle"  ] 
+            ]
+    ]
   ] 
 
 
@@ -278,11 +280,6 @@ collectConcreteTypes g = let sigs = snd $ signatureNames g in
   [ zipWith assignSig sigs concretes  | concretes <- Map.elems $ typemappings g ] 
   
   
-
--- buildTypeMapping :: Grammar -> Type -> SigName -> Sig Type
--- buildTypeMapping ::
-
-
 ppTypeMappings mappings = "type_interpretations =\n" ++ gasList
  [  concat [show abs," = ", chevrons $ concat $ intersperse "," $ map show concr]       |  (abs,concr) <- Map.toList mappings ]
 
@@ -301,5 +298,6 @@ instance Show Grammar where
     ]
 
 showTuple (abs,concs) = abs ++ " = " ++ (chevrons $ concat $ intersperse "," $ concs)
+
 
 
