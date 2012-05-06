@@ -16,7 +16,7 @@ repl prevState = do
       Just ":quit" -> return ()       -- quit
       Just ":q"    -> return ()
       Just line    -> do              -- parse and execute the command
-        newstate <- runStateT (processCommand2 $ line) prevState 
+        newstate <- runStateT (processCommand $ line) prevState 
         addHistory line
         repl (snd newstate)           -- pass on the updated state
   }
