@@ -6,19 +6,19 @@ import Control.Monad.Trans.State.Lazy
 import System.Console.Readline
 
 import Data.Maybe
--- top level loop: get input, proces it to get a command, execute the command, and propagate the updated state
 
+-- read evaluate print loop, passes interpreter state around
 repl :: InterpreterState -> IO ()
 repl prevState = do
   { input   <- readline "> "
   ; case input of 
-      Nothing      -> repl prevState
-      Just ":quit" -> return ()
+      Nothing      -> repl prevState  -- do nothing
+      Just ":quit" -> return ()       -- quit
       Just ":q"    -> return ()
-      Just line    -> do 
+      Just line    -> do              -- parse and execute the command
         newstate <- runStateT (processCommand2 $ line) prevState 
         addHistory line
-        repl (snd newstate)
+        repl (snd newstate)           -- pass on the updated state
   }
 
 -- display welcome menu, start top level loop with initial state

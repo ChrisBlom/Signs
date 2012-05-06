@@ -39,11 +39,11 @@ isCommand = (==':') . head
 parseCommand :: Parser Command    
 parseCommand = 
   (string ":" >> choice 
-    [ parseTex    
+    [ parseTypeOf
+    , parseTex    
     , parseSaveTex
     , parseReload
     , parseLoad
-    , parseTypeOf
     , string "status" >> return Status  
     , string "h" >> optional (string "elp")   >> return Help
     ] <?> "command string")

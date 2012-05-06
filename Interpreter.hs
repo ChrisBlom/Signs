@@ -25,9 +25,9 @@ import Text.ParserCombinators.Parsec hiding ((<|>),State)
 
 import Tex
 
-type I a = StateT InterpreterState IO a 
+type InterpreterIO = StateT InterpreterState IO ()
 
-interpret :: I a -> IO InterpreterState
+interpret :: InterpreterIO -> IO InterpreterState
 interpret f = liftM snd $ runStateT f initialState
 
 -- the global state of the interpreter : 
@@ -64,7 +64,7 @@ run' commands  = sequence_ $ map execute commands
 testrun commands = run $ Load "opt.signs" : commands
 
 -- operational semantics of the command language
-execute :: Command -> I ()
+execute :: Command -> InterpreterIO
 execute command  = case command of
   Load filename        -> doLoad filename
   Evaluate term        -> doPrintSign term
@@ -74,6 +74,13 @@ execute command  = case command of
   TypeOf term          -> doTypeInfer term
   Help                 -> liftIO $ sequence_ $ map putStrLn helpmenu
 
+
+-- parses a string to commannds and executes them
+execute' :: String -> InterpreterIO
+execute' string  = case runParser parseCommand () "" string of
+  Left  errormsg -> liftIO $ print errormsg 
+  Right command  -> execute command 
+
 -- load a file into the state
 doLoad filename = sequence_ 
   [ liftIO $ putStr ("loading... \t" ++ filename)
@@ -82,7 +89,7 @@ doLoad filename = sequence_
   ]
 
 -- load, parse, and type-check a grammar file
-loadGrammarFile :: FilePath ->  I ()
+loadGrammarFile :: FilePath ->  InterpreterIO
 loadGrammarFile path = do
   content <- liftIO (loadGrammar path)
   case content of
@@ -97,7 +104,7 @@ loadGrammarFile path = do
       ]
     
 -- type check the grammar, unset the current grammer on any failure    
-typeCheckGrammar :: I ()
+typeCheckGrammar :: InterpreterIO
 typeCheckGrammar = do
   withGrammar' $ \g ->
    let errors = filter (not . null) $ validate g in
@@ -125,16 +132,13 @@ doTypeInfer term = do
     Nothing -> "no grammar loaded" 
     
   
-execute2' :: String -> I ()
-execute2' string  = case runParser parseCommand () "" string of
-  Left  errormsg -> liftIO $ print errormsg 
-  Right command  -> execute command 
+
 
 -- interaction with commandline
---processCommand2 :: String -> InterpreterState -> IO InterpreterState
-processCommand2 string 
+processCommand :: String -> InterpreterIO
+processCommand string 
   | null string   = modify id           -- do nothing
-  | otherwise     = execute2' string
+  | otherwise     = execute' string     -- execute commands
 
 -- Parses a term with untyped constants.
 procesConsoleTerm :: Grammar -> String -> MyError Term
@@ -180,7 +184,7 @@ doPrintSign term = do
 -- display a term as a latex file
 doShowTex 
      :: Term
-     -> I ()
+     -> InterpreterIO
 doShowTex term = do
   state <- get
   liftIO $ putStrLn $ case active_grammar state of
@@ -198,7 +202,7 @@ texSign sign =  mathmode $  tex sign
 doSaveTex 
      :: Term
      -> Maybe FilePath 
-     -> I ()
+     -> InterpreterIO
 doSaveTex term file = do
   withGrammar' $ \g -> case procesConsoleTerm' g term of 
      Left error      -> liftIO $ putStrLn error
