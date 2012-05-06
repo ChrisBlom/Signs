@@ -30,7 +30,8 @@ helpmenu =
   , ":r(eload)               \t : reload the last loaded grammar file"
   , ":t(ype) 'term'          \t : infers and displays the type of 'term'"
   , ":tex 'term'             \t : pretty prints 'term' as latex source"
-  , ":savetex 'filename' 'term' \t : saves the latex repr. of 'term' in 'file'"  
+  , ":savetex 'filename' 'term' \t : saves the latex repr. of 'term' in 'file'" 
+  , ":q(uit)                 \t : exit" 
   ]
   
 isCommand = (==':') . head  

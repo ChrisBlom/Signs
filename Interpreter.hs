@@ -14,13 +14,11 @@ import MyError
 import Commands
 import Control.Monad.Error
 import Control.Monad.Reader
-import System.Environment
-
-
 import Data.Maybe
 import Data.Either
+
 import System.IO
-import Control.Monad.Trans.State.Strict
+import Control.Monad.Trans.State
 
 import Data.List
 import Text.ParserCombinators.Parsec hiding ((<|>),State)

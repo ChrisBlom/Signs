@@ -22,7 +22,7 @@ import Control.Monad.Reader
 import Data.Maybe
 import Data.Either
 import System.IO
-import Control.Monad.Trans.State.Strict
+import Control.Monad.Trans.State.Lazy
 
 pair a b = (a,b)
 

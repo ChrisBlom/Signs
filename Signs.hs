@@ -1,25 +1,31 @@
+
+import Commands
 import Interpreter
 
-import System.IO.Unsafe
+import Control.Monad.Trans.State.Lazy
+import System.Console.Readline
 
-
-
-import Control.Monad.Error
-import Control.Monad.Trans.State.Strict
-
+import Data.Maybe
 -- top level loop: get input, proces it to get a command, execute the command, and propagate the updated state
-topLevelLoop state = do
-  { putStr ">" 
-  ; input   <- getLine
-  ; newstate <- runStateT (processCommand2 input) state
-  ; topLevelLoop (snd newstate)
+
+repl :: InterpreterState -> IO ()
+repl prevState = do
+  { input   <- readline "> "
+  ; case input of 
+      Nothing      -> repl prevState
+      Just ":quit" -> return ()
+      Just ":q"    -> return ()
+      Just line    -> do 
+        newstate <- runStateT (processCommand2 $ line) prevState 
+        addHistory line
+        repl (snd newstate)
   }
 
 -- display welcome menu, start top level loop with initial state
 main :: IO ()
-main = sequence_ [header,putStr ">",topLevelLoop initialState]
+main = sequence_ [welcome,repl initialState]
 
-header = mapM_ putStrLn
+welcome = mapM_ putStrLn
  [" _______ _________ _______  _     _  _______ "
  ,"(  ____ \\\\__   __/(  ____ \\( \\   ( )/  ____ \\"
  ,"| (    \\/   ) (   | (    \\/|  \\  | || (    \\/"
