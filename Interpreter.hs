@@ -124,12 +124,11 @@ doReload = do
 -- infer the type of a term and display it    
 doTypeInfer term = do
   state <- get    
-  liftIO $ putStrLn $ case active_grammar state of 
-    Just g -> do
-        (either show show) $ do 
-        term <- procesConsoleTerm' g term
-        (typeOfE term)           
-    Nothing -> "no grammar loaded" 
+  liftIO $ case active_grammar state of 
+    Just g -> case procesConsoleTerm' g term of
+          Left err -> putStrLn err
+          Right t  -> either print print $ typeOfE t
+    Nothing -> putStrLn "no grammar loaded" 
     
   
 

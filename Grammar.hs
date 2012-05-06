@@ -60,7 +60,7 @@ prettyPrintSign sign  = do
           sig = snd (signatureNames g) !! index 
           typ = showAbbt $ fromJust $ fromRight $ liftM (typeHomomorphism g sig) (typeOfE (abstract sign))
  return $ concat
-  [ concat [show $ abstract sign," :: ", (either id show) (typeOfE $ abstract sign)]
+  [ concat [show $ abstract sign," :: ", (either show show) (typeOfE $ abstract sign)]
   , " = \n\t< "
   ,   concat $ intersperse "\n\t, " $ map (\(x,i) -> addType (x,i)  ) (zip (concretes sign) [0..])
   , "\n \t>"
@@ -149,17 +149,16 @@ typeCheckG constant concreteSig = do
  grammar <- ask
  return $
   case (typeOfE constant) of 
-   Left  error -> Left error
+   Left  error -> Left $ show error
    Right typ -> 
      let
      concreteTerm  = (termHomomorphism grammar concreteSig) constant
      concreteTypeA = (typeHomomorphism grammar concreteSig) typ
      in if isJust concreteTypeA && isRight concreteTerm
       then let concreteTypeB = fromRight $ typeOfE $ fromRight concreteTerm in
-       (\x -> "typing error in " ++ show concreteSig ++ " component of " ++ show constant 
-           ++"\n\t : "++x )
+       (\x -> show x ++ " in " ++ show concreteSig ++ " component of " ++ show constant ++"\n\t : ")
        .|.
-       (\x -> (show constant) ++" is "++ x ++ " for the "++ concreteSig ++ " component.")
+       (\x -> (show constant) ++" is "++ show x ++ " for the "++ concreteSig ++ " component.")
        $ unifiable concreteTypeB (fromJust concreteTypeA)
       else
        Left $ "missing "++ concreteSig ++" term in " ++ show constant

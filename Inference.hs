@@ -1,10 +1,8 @@
 module Inference
 ( TI
 , Subst
--- , typeOf
 , typeOfE
 , mgu
-, disp
 , validSubst
 ) where
 
@@ -41,6 +39,16 @@ import Control.Monad.Error
 import Control.Monad.Reader
 import Control.Monad.State
 
+
+newtype TypeError = TypeError String
+instance Show TypeError where
+  show (TypeError t) = "type error: " ++ t
+instance Tex TypeError where
+  tex = text . show
+instance Error TypeError where
+  noMsg  = TypeError ""
+  strMsg = TypeError
+-- checks if two types are unifiable
 unifiable a b = validSubst $ a `mgu` b 
 
 validSubst result = let (x,state) = runTI result in
@@ -48,39 +56,11 @@ validSubst result = let (x,state) = runTI result in
     Right _  -> True 
     Left err -> False
 
-
-typeOf e = let (x,state) = runTI (typeInference Map.empty e) in
- case x of 
-    Right typ -> typ
-    Left err -> error $ err ++ " in " ++ show e 
-
-typeOfE e = fst $ runTI (typeInference Map.empty e) 
- 
-safetypeOfE e = fst $ runTI (typeInference Map.empty e) 
-
-disp e = let (x,state) = runTI e in
-  case x of 
-    Right typ -> typ ; 
-    Left err -> error err;
-
-
-term0 :: Term
-term0 = Con "testB" (Atom "X")
-
-term1 :: Term
-term1 = Con "TestA" (Atom "A")
-
-term2 = Pair (Con "TestA" (Atom "X") ) (Con "TestB" (Atom "Y"))
-
-term3 = Lam "x" (App (Var "x") term1 )
-
-termF2 = Lam "x" (App (Var "x") (Var "x") )
-
-termF = Lam "x" ( (App term1 (Var "x") ))
-
-term4 :: Term
-term4 =  Lam "f" $ Lam "g" $ Lam "x" $ App (Var "f") $ App (Var "g") (Var "x")
-
+-- returns the type of term, or an error message if the term is not well-typed
+typeOfE :: Term -> Either TypeError Type
+typeOfE term = case fst $ runTI (typeInference Map.empty term) of
+  Left  error -> Left $ TypeError error
+  Right typ   -> Right  $ typ
 
 data Scheme =  Scheme [Variable] (Type)
 
