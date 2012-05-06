@@ -18,8 +18,6 @@ Based on descriptions and code found in:
   publisher={Citeseer}
 }
 
-
-TODO : avoid IO
 -}
 
 import Tex
@@ -48,6 +46,8 @@ instance Tex TypeError where
 instance Error TypeError where
   noMsg  = TypeError ""
   strMsg = TypeError
+
+
 -- checks if two types are unifiable
 unifiable a b = validSubst $ a `mgu` b 
 
@@ -125,24 +125,20 @@ data TIEnv = TIEnv
 
 -- | data type for Type Inference state (variable bookkeeping and substitution)
 data TIState = TIState 
-  { --tiSupply :: Int,
-    tiUsed   :: [Variable]
+  { tiUsed   :: [Variable]
   , tiSubst  :: Subst
   }
 
+-- initial TIState
 initTIState :: TIState
 initTIState = TIState {tiUsed = [] , tiSubst = Map.empty}
 
 
+-- Type Inference monad : errors (strings) and state (fresh vars and subs) 
+type TI a  = ErrorT String (State TIState) a
 
-type TI a  = ErrorT String (ReaderT TIEnv (StateT TIState Identity )) a
-
-
-runTI :: TI a  ->  (Either String a, TIState)
-runTI ti = runState (runReaderT (runErrorT ti) initTIEnv) initTIState
-----       return (res, st)
-  where initTIEnv = TIEnv{}
-
+runTI :: TI a  -> (Either String a, TIState)
+runTI inferencer = runState (runErrorT inferencer) initTIState
 
 -- | get a fresh variable
 newTyVar :: String -> TI Type
@@ -166,7 +162,7 @@ instantiate (Scheme vars t) = do
 
 
 -- returns the most general unifier of two types
-mgu :: (Type) -> (Type) -> TI (Subst ) 
+mgu :: Type -> Type -> TI Subst
 a .=. b = mgu a b
 
 -- functions
@@ -206,7 +202,7 @@ tiLit :: TypeEnv -> Term -> TI (Subst,Type)
 tiLit _ (Con a t)   =  return (nullSubst, t)
 
 
-ti :: TypeEnv -> (Term) -> TI (Subst, Type)
+ti :: TypeEnv -> Term -> TI (Subst, Type)
 ti (TypeEnv env) (Var n) = 
     case Map.lookup n env of
        Nothing     ->  (throwError $ "Inference.ti : unbound variable: " ++ n) 
@@ -260,46 +256,7 @@ ti env (NotNil inner) = do
   tv <- newTyVar "a"
   (s1, t1) <- ti env inner
   s3 <- mgu  (tv) (Option t1)
-  return (s3 `composeSubst` s1, doSub s3 tv)
-          
-          {-
-ti env (CaseO o f d) = do
-  tA <- newTyVar "a"
-  tB <- newTyVar "b"
-
-  (sD, typeD) <- ti env d  
-  (sF, typeF) <- ti (doSub sD env) f 
-  (sO, typeO) <- ti (doSub sF env) o
-
-  s3 <- mgu (doSub sF typeD) (tB)     
-  s1 <- mgu (doSub sD typeF) (tA :-> (doSub s3 tB) ) 
-  s2 <- mgu (doSub s1 typeO) (doSub s1    (Option tA))
-
-
-  return (foldr1 composeSubst [s1,s2,s3] , doSub s2 typeD )          
-          -}
-          
-         {-    
-ti env (CaseO o f d) = do
-  tA <- newTyVar "a"
-  tB <- newTyVar "b"
-
-
-
-  (so, to) <- ti env o
-  (sf, tf) <- ti env f
-  (sd, td) <- ti env d
-    
-  let subs = foldr1 composeSubst [sd,sf,so] 
-    
-  so' <- to `mgu` (doSub subs $ Option tA)
-  sf' <- tf `mgu` (doSub so'  $ tA :-> tB)
-  sd' <- td `mgu` (doSub sf' $ tB)  
-    
-  return ( sd  , doSub sd' tB)
--}
-          
-          
+  return (s3 `composeSubst` s1, doSub s3 tv)                 
 
 ti env (CaseO o f d) = do
   tA <- newTyVar "z"
@@ -368,14 +325,7 @@ bu m (Lam x body) =
        (a, c, t) <- bu (vn `Set.insert` m) body
        return (a `removeAssum` x, c ++ [CEquivalent t' b | (x', t') <- a,
                                         x == x'], (:->) b t)
-                                        {-
-bu m (ELet x e1 e2) =
-    do (a1, c1, t1) <- bu m e1
-       (a2, c2, t2) <- bu (x `Set.delete` m) e2
-       return (a1 ++ removeAssum a2 x,
-               c1 ++ c2 ++ [CImplicitInstance t' m t1 |
-                            (x', t') <- a2, x' == x], t2)
--}
+
 removeAssum [] _ = []
 removeAssum ((n', _) : as) n | n == n' = removeAssum as n
 removeAssum (a:as) n = a : removeAssum as n
