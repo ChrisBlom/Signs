@@ -110,7 +110,7 @@ addTypesToTermG sig term = let cmap' = addTypesToTermG sig  in
   NotNil j      -> (liftM.liftM) NotNil (cmap' j)
   CaseO o j d   -> (liftM3.liftM3) CaseO (cmap' o) (cmap' j) (cmap' d)
   Lam v term    -> (liftM.liftM) (Lam v) (cmap' term) 
-  x -> error $ concat ["no case for " , show x ]
+--  x -> error $ concat ["no case for " , show x ]
 
   
 getSignG :: String -> GrammarEnv ( Either ErrorMessage Sign )
