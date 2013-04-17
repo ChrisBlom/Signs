@@ -15,29 +15,30 @@ data Sign = Sign
   } deriving (Eq)
 
 instance Tex Sign where
-  tex s = typedTriple s
+  tex = typedTripleTex
 
 
 -- reduces all terms in a sign
 reduceSign (Sign a c) = Sign (reduce a) (map reduce c)
 
 -- Pretty prints a sign
-typedTriple (Sign absTerm [stringTerm,semTerm])  = case typeOfE $ reduce absTerm of 
-  Right absTyp -> array [ [ hcat [tex absTerm ,  text " : "  <> (texStyle "ABSTRACT" $ absTyp) , text " = "  ] ] , [pair]   ] 
+typedTripleTex (Sign absTerm [stringTerm,semTerm])  = case typeOfE $ reduce absTerm of 
+  Right absTyp -> array [ [ hcat [tex absTerm ,  text " : "  <> (texStyle "ABSTRACT" absTyp) , text " = "  ] ] , [pair]   ] 
     where pair =  array [string,semant]
           string = [text "\\langle" ,  texTerm "STRING" stringTerm  ]
           semant = [ text ","       ,  texTerm "SEM" semTerm  , text "\\rangle"]
-  Left error -> text $ "typedTriple : " ++  error
+  Left error -> text $ "typedTriple : " ++ show error
 
 asList (Sign a b) = a : b
 
 instance Show Sign where
  show s = concat 
-  [ case (abstract s) of 
-      c@(Con s t) -> show c ++ " :: " ++ show t
-      x -> show x ++ " :: " ++ (case typeOfE x of Right typ -> show typ ; Left err -> err)
+  [ case abstract s of 
+      constant@(Con s t) -> show constant ++ " :: " ++ show t
+      x -> show x ++ " :: " ++ (case typeOfE x of Right typ -> show typ ; Left err -> show err)
   , " = \n\t< "
-  ,   concat $ intersperse "\n\t, " (map (\x -> ((show . reduce) x) ++ " :: " ++ (show $ typeOfE $ reduce x)) (concretes s))
+  ,   intercalate "\n\t, " $
+        map ( \term -> concat [show $ reduce term ," :: ",(show . typeOfE . reduce) term]) (concretes s)
   , "\n \t>"
   ]
 
@@ -53,13 +54,7 @@ signParser = do
 tuple p = parseList (string "<") (do {ws ; p}) (do ws ; reservedOp "," ; ws) (ws >> string ">")
 
 -- combinator to parse signs like  content1 = < content2 .... >
-abstract_concrete p = do
-  a <- p
-  optional spaces
-  reservedOp "="
-  optional spaces
-  c <- tuple p
-  return (a,c)
+abstract_concrete p = abstract_concrete' p p
 
 abstract_concrete' q p = do
   a <- q

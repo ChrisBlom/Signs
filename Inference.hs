@@ -2,6 +2,7 @@ module Inference
 ( TI
 , Subst
 , typeOfE
+, typeOf
 , mgu
 , validSubst
 ) where
@@ -55,6 +56,12 @@ validSubst result = let (x,state) = runTI result in
   case x of 
     Right _  -> True 
     Left err -> False
+
+
+typeOf :: Term -> Maybe Type 
+typeOf term = case typeOfE term of 
+  (Left  e) -> Nothing
+  (Right t) -> Just t
 
 -- returns the type of term, or an error message if the term is not well-typed
 typeOfE :: Term -> Either TypeError Type
@@ -275,7 +282,7 @@ ti env (CaseO o f d) = do
 
                     
           
-ti _ x = error$ "missing case in ti for " ++ show x
+ti _ x = error $ "missing case in ti for " ++ show x
 
 testO = Lam "v" $ Lam "o" $ CaseO ( Var "o" ) (Lam "o'" $ Var "v" `App` Var "o'" ) ( Con "x" (Atom "e" :-> Atom "t") ) 
 

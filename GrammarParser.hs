@@ -21,14 +21,18 @@ type TypeInterpretation = Map.Map Type [Type]
 
 instance Parse Grammar where parseDef = grammar
 
+testGrammar = do
+  g <- loadGrammar "opt.signs"
+  return ( (\(Right x) -> x) g)
+
 -- load and parse a grammar file
 loadGrammar :: FilePath -> IO (Either ParseError Grammar)
 loadGrammar path = do
-  file <- readFile path  
+  file <- readFile path
   return (parse grammar path file)
 
 -- grammar parser
-grammar = do 
+grammar = do
   { sigNames <- signatures
   ; lines
   ; typeMappings <- type_interpretations
@@ -39,14 +43,14 @@ grammar = do
   } <?> "grammar"
 
 
-signatures = do 
+signatures = do
   { reserved "signatures"  ; optional spaces
   ; (abstract,concretes) <- abstract_concrete capitalized
   ; return (abstract,concretes)
   } <?> "a list of signature definitions, each on a single line"
 
 capitalized = do { u <- upper ; l <- many1 lower ; return (u:l) } <?> "capitalized"
-    
+
 
 type_mapping = do
   (abstract,concretes) <- abstract_concrete' atom (parseDef :: Parser Type)
@@ -55,12 +59,12 @@ type_mapping = do
 
 type_interpretations = do
   { reserved "type_interpretations"
-  ; reservedOp "=" 
+  ; reservedOp "="
   ; ws
   ; mappings <- ( parseList (char '[' >> ws) type_mapping  (ws >> comma >> ws) (ws >> char ']') )
-  ; return  mappings 
+  ; return  mappings
   } <?> "a type interpreation function definitions, of the form  [ 'abstract1' -> 'concrete1' , 'abstract2' -> concrete2' ]"
-  
+
   
 freely x = ospaces .>. x .>. ospaces
 

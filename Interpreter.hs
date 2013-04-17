@@ -67,12 +67,14 @@ testrun commands = run $ Load "opt.signs" : commands
 execute :: Command -> InterpreterIO
 execute command  = case command of
   Load filename        -> doLoad filename
-  Evaluate term        -> doPrintSign term
-  Reload               -> doReload
+  Evaluate term        -> doEvaluate term
+  Reload               -> doReload  
   Echo string          -> liftIO $ putStrLn string
   SaveTex term file    -> doSaveTex term file
   TypeOf term          -> doTypeInfer term
   Help                 -> liftIO $ sequence_ $ map putStrLn helpmenu
+  Listing filter       -> doListing filter
+
 
 
 -- parses a string to commannds and executes them
@@ -125,7 +127,7 @@ doReload = do
 doTypeInfer term = do
   state <- get    
   liftIO $ case active_grammar state of 
-    Just g -> case procesConsoleTerm' g term of
+    Just g -> case readConsoleTerm' g term of
           Left err -> putStrLn err
           Right t  -> either print print $ typeOfE t
     Nothing -> putStrLn "no grammar loaded" 
@@ -140,15 +142,16 @@ processCommand string
   | otherwise     = execute' string     -- execute commands
 
 -- Parses a term with untyped constants.
-procesConsoleTerm :: Grammar -> String -> MyError Term
-procesConsoleTerm g input = do
+readConsoleTerm :: Grammar -> String -> Either ErrorMessage Term
+readConsoleTerm g input = do
   absTerm <- (show .|. id) $ parse term' "console" input
-  typedAbsTerm <- runReader (addTypesToTermG (runReader getAbstractSig g) absTerm) g
+  typedAbsTerm <- runReader (addTypesToTerm (runReader getAbstractSig g) absTerm) g
   return typedAbsTerm
   
 -- Parses a term with untyped constants.
-procesConsoleTerm' :: Grammar -> Term -> MyError Term
-procesConsoleTerm' g absTerm = runReader (addTypesToTermG (runReader getAbstractSig g) absTerm) g
+readConsoleTerm' :: Grammar -> Term -> Either ErrorMessage Term
+readConsoleTerm' grammar abstractTerm = runReader typedTerm grammar
+  where typedTerm = addTypesToTerm (runReader getAbstractSig grammar) abstractTerm
 
 -- maps an abstact term to its sign  
 termToSign :: Grammar -> Term -> Either String Sign
@@ -171,31 +174,31 @@ withGrammar' f = do
     Nothing -> liftIO $ putStrLn "no sign grammar loaded yet"
     
     
--- evalutate, types and prints a term  
-doPrintSign term = do 
-  withGrammar $ \g -> case procesConsoleTerm' g term of
+-- evalutates, adds types and prints a term  
+doEvaluate term = do 
+  withGrammar $ \grammar -> case readConsoleTerm' grammar term of
      Left error      -> putStrLn error 
-     Right typedTerm -> case termToSign g typedTerm of 
+     Right typedTerm -> case termToSign grammar typedTerm of 
        Left error  -> putStrLn error 
-       Right sign  -> putStrLn $ runReader (prettyPrintSign sign) g
+       Right sign  -> putStrLn $ runReader (prettyPrintSign sign) grammar
        
       
 -- display a term as a latex file
-doShowTex 
-     :: Term
-     -> InterpreterIO
+doShowTex :: Term -> InterpreterIO
 doShowTex term = do
   state <- get
   liftIO $ putStrLn $ case active_grammar state of
    Nothing -> "no sign grammar loaded yet" 
-   Just g -> case procesConsoleTerm' g term of   
+   Just g -> case readConsoleTerm' g term of   
      Left error      -> error
      Right typedTerm ->  case (termToSign g typedTerm) of
       Left error -> error
       Right x    -> render $ runReader (prettyPrintSignTex (reduceSign x)) g
-     
-        
-texSign sign =  mathmode $  tex sign
+      
+      
+-- display a term as a latex file
+doListing filter = do 
+  withGrammar $ \g -> putStrLn (show g)
 
 -- save a term as a latex file, or display it of no file is specified
 doSaveTex 
@@ -203,7 +206,7 @@ doSaveTex
      -> Maybe FilePath 
      -> InterpreterIO
 doSaveTex term file = do
-  withGrammar' $ \g -> case procesConsoleTerm' g term of 
+  withGrammar' $ \g -> case readConsoleTerm' g term of 
      Left error      -> liftIO $ putStrLn error
      Right typedTerm -> case termToSign g typedTerm of 
        Left error  -> liftIO $ putStrLn error 

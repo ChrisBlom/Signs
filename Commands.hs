@@ -5,11 +5,10 @@ import Term
 import Data.Maybe
 import Text.ParserCombinators.Parsec hiding ((<|>))
 
--- the command language for the interpreter
+-- This ADT defines the the command language for the interpreter
 data Command
      = Load String
      | Save            (Maybe FilePath)
-     | AddSign
      | TypeOf          Term
      | Reload
      | SaveTex         Term (Maybe FilePath)
@@ -19,6 +18,7 @@ data Command
      | Echo String
      | Help
      | Unknown    
+     | Listing String  -- show a listing, the arg serves as a filter
      deriving (Eq,Show)
      
 helpmenu = 
@@ -32,6 +32,7 @@ helpmenu =
   , ":tex 'term'             \t : pretty prints 'term' as latex source"
   , ":savetex 'filename' 'term' \t : saves the latex repr. of 'term' in 'file'" 
   , ":q(uit)                 \t : exit" 
+  , ":l(ist) 'filter'        \t : lists the loaded grammar"
   ]
   
 isCommand = (==':') . head  
@@ -39,11 +40,12 @@ isCommand = (==':') . head
 parseCommand :: Parser Command    
 parseCommand = 
   (string ":" >> choice 
-    [ parseTypeOf
-    , parseTex    
+    [ parseTex    
     , parseSaveTex
+    , parseTypeOf
     , parseReload
     , parseLoad
+    , parseListing 
     , string "status" >> return Status  
     , string "h" >> optional (string "elp")   >> return Help
     ] <?> "command string")
@@ -110,5 +112,11 @@ parseSaveTex = do
   spaces
   term <- term'      
   return (SaveTex term (Just filename) )
-     
+
+parseListing = do
+  string "p"
+  optional $ string "rint"
+  string " "
+  maybeTarget <- do many alphaNum
+  return (Listing maybeTarget)     
    

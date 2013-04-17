@@ -6,6 +6,7 @@ module Parse
   , parseDef
   , binary , prefix , postfix
   , identifier
+  , P.whiteSpace
   , pparens
   , reservedOp
   , reserved
@@ -49,20 +50,20 @@ class Parse a where
 
   qparse string =  parse parseDef "" string
 
-defs =  emptyDef { commentStart   = "{-"
-                , commentEnd     = "-}"
-                , commentLine    = "--"
+defs = emptyDef { commentStart   = "/*"
+                , commentEnd     = "*\\"
+                , commentLine    = "//"
                 , nestedComments = True
                 , identStart     = lower
                 , identLetter	 = alphaNum <|> oneOf "_'"
                 , opStart	 = opLetter defs
                 , opLetter	 = oneOf "->\\/+"
-                , reservedOpNames= ["->","+","/\\@"]
-                , reservedNames  = words "option forall id exists OPT DEOPT :: PAT AG GOAL TRUE FALSE"
+                , reservedOpNames= ["->","+","/\\@","=",":"]
+                , reservedNames  = words "\\ option forall id exists OPT DEOPT :: PAT AG GOAL TRUE FALSE"
                 , caseSensitive  = True
                 }
 
-lexer = P.makeTokenParser defs
+lexer       = P.makeTokenParser defs
 pparens     = P.parens lexer
 identifier  = P.identifier lexer
 reserved    = P.reserved lexer
@@ -79,7 +80,7 @@ ws :: Parser String
 ws = many (space <|> newline)
 
 
-parseList start elem sep end = do 
+parseList start elem sep end = do
   start
   content <- parseCons elem (sep >> ws)  
   ws
@@ -105,14 +106,18 @@ parseNext elem sep =
     
 -- The end of line character is \n
 eol :: GenParser Char st Char
-eol = char '\n'
+eol = newline
 
 
 -- parser for the command language
 parseFileName :: String -> Parser String
 parseFileName defaultExtension = do
-  name <- many1 (alphaNum <|> char '.' <|> char '/')
-  maybeExt <- optionMaybe (do { string "." ; ext <- many1 alphaNum ; return ext } )
+  name <- many1 ( alphaNum <|> char '.' <|> char '/' )
+  maybeExt <- optionMaybe $
+              do { string "." 
+                 ; ext <- many1 alphaNum 
+                 ; return ext 
+                 } 
   return (name ++ (maybe ("."++defaultExtension) ("."++) maybeExt) )
   <?> "filename"
     

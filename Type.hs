@@ -24,9 +24,30 @@ data Type
   | Void
   deriving (Ord,Eq) -- ,Show)
 
+
+typeT = Atom "t"
+typeE = Atom "e"
+
+markerless t = case t of
+  a :-> b   -> markerless a && markerless b
+  a :+: b   -> markerless a && markerless b
+  a :*: b   -> markerless a && markerless b
+  Option a  -> markerless a
+  Marker _ _ -> True
+  _         -> False
+
+
 -- Parser for types
 atom :: Parser Type
 atom = liftM Atom identifier <?> "atomic type"
+
+
+
+isBoolean t = case t of 
+  Atom "t" -> True
+  _ :-> x  -> isBoolean x
+  _        -> False
+
 
 typ :: Parser Type
 -- typ = buildExpressionParser typetable simpletype <?> "type expression"

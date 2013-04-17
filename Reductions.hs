@@ -1,6 +1,6 @@
 module Reductions (reduce) where
 
-{- In the Reductions module the various reduction operations for terms are defined
+{- In this module the various reduction operations for terms are defined
    
    The only exported funciton is reduce, which reduces a term to its normal form.
    
@@ -12,7 +12,7 @@ module Reductions (reduce) where
    - Product reduction
    
    Variable renaming and capture avoiding substitution (required for beta-reduction)
-   are also defined here.
+   are are used in beta reduction
  -}
  
 import Term
@@ -20,6 +20,11 @@ import Term
 import Data.List 
 import Prelude hiding ((^))
 import qualified Data.Foldable as Fold
+
+
+insertDef :: (String,Term) -> Term -> Term
+insertDef (varName,def) inTerm = subst varName def inTerm
+
 
 -- reductions : applies all the reductions until convergence
 reduce :: Term -> Term

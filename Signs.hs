@@ -1,7 +1,7 @@
 
 import Commands
 import Interpreter
-
+import Parse
 import Control.Monad.Trans.State.Lazy
 import System.Console.Readline
 
@@ -15,8 +15,8 @@ repl prevState = do
       Nothing      -> repl prevState  -- do nothing
       Just ":quit" -> return ()       -- quit
       Just ":q"    -> return ()
-      Just line    -> do              -- parse and execute the command
-        newstate <- runStateT (processCommand $ line) prevState 
+      Just line    -> do              
+        newstate <- runStateT (processCommand $ line) prevState -- parse and execute the command
         addHistory line
         repl (snd newstate)           -- pass on the updated state
   }
@@ -34,7 +34,7 @@ welcome = mapM_ putStrLn
  ,"      ) |   | |   | | \\_  )| | \\   |      ) |"
  ,"/\\____) |___) (___| (___) || |  \\  |/\\____) |"
  ,"\\_______)\\_______/(_______)(_)   \\_)\\_______)"
- ," v0.96                       Chris Blom 2012   "
+ ," v0.97                       Chris Blom 2013   "
  ,""
  ,"enter :help to list the available commands."
  ,""

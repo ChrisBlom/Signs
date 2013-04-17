@@ -11,10 +11,10 @@ maybeToError msg f x = case x of
   (Just a) -> Right $ f a
   Nothing  -> Left $ msg (show x) 
 
-type MyError a = Either ErrorMessage a
+type MessageError a = Either ErrorMessage a
 
 type ErrorMessage = String
-type InfoMessage = String
+type SuccesMessage = String
 
 (f .|. g) x = case x of
   Left  x' -> Left  (f x')
@@ -22,7 +22,6 @@ type InfoMessage = String
 
 left  f = (f .|. id)
 right f = (id .|. f)
-
 
 try (Right x) f = f x
 try (Left x) f = putStrLn x

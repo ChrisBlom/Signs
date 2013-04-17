@@ -25,8 +25,12 @@ import qualified Data.Map as Map
 tests = 
       ["\\x.x"
       ,"\\x.\\f.\\d.option(x,f,d)"
+      ,"\\f.f (John :: t)"      
+      ,"John :: t"
+      ,"\\x. bla x"
+      ,"\\x . \\ y . y x"
+      ,"\\x  y . y x"      
       ]
-
 
 type Variable = String
 
@@ -37,9 +41,11 @@ infixl 9 `App`
 data Term
   -- basic
   = Var Variable
+  | MetaVar  Variable 
   | Con String Type
   | App (Term) (Term)
   | Lam Variable (Term)
+  | MetaLam Variable (Term)  
   -- tuples
   | Pair (Term) (Term)
   | Fst (Term )
@@ -52,9 +58,10 @@ data Term
   | Nil
   | NotNil (Term)
   | CaseO (Term) (Term) (Term)
-  deriving (Ord,Eq)
+  deriving (Show,Ord,Eq)
 
 instance Parse Term where parseDef = term
+
 
 term   = buildExpressionParser termtable (simpleterm term con) 
       <?> "expression"
@@ -63,19 +70,24 @@ term'   = buildExpressionParser termtable (simpleterm term' con')
       <?> "expression"
 
 
+
 ident = identifier 
 
 var = liftM Var ident
 
+close :: Term -> Term
+close term = let 
+  freeVars = free term in
+  foldr Lam term  freeVars
 
 simpleterm trm constant = do {
  t <- choice
   [ pparens trm
-  , omitted 
-  , emptystring
+  , omitted          <?> "*"
+  , emptystring      
   , identity
-  , constant 
-  , lam ident trm
+  , constant         <?> "constant"
+  , lam ident trm    <?> "lambda abst"
   , forall_ ident trm
   , exists_ ident trm
   , option trm
@@ -102,24 +114,31 @@ fff = f :-> f :-> f
 omitted     = reserved "*" >> return Nil
 emptystring = reserved "_" >> return (Con "Eps" (Atom "f"))
 
-
 identity = do
   reserved "id"
   return (Lam "x" (Var "x") )
 
+-- parses a single lambda var : a ab abc a' a'' a'''
+variableParser = do 
+  letters <- many1 lower
+  quotes  <- many (char '\'')
+  return $ letters++quotes
 
-  
-
-lam vr trm = do
+-- parses a lambda var + body
+lam :: Parser String -> Parser Term -> Parser Term
+lam pVar trm = do
   string "\\"
-  (optional spaces)
-  var <- vr
-  (optional spaces)
+  vars <- (sepBy1 variableParser (skipMany1 space)) -- lowercase string, separated by multiple spaces
   string "."
   spaces
-  term <- trm
-  return (Lam var term)
+  body <- trm
+  return (expandLambdas vars body)
 
+-- expandLambdas [a,b..z] m = Lam a (Lam b .. (Lam z m) .. )
+expandLambdas :: [String] -> Term -> Term
+expandLambdas strings body = case strings of
+  []          -> body
+  (var:vars)  -> Lam var (expandLambdas vars body)
 
 forall_ vr trm = do 
   reserved "forall"
@@ -132,14 +151,15 @@ forall_ vr trm = do
   return (for_all var term)
   <?> "universal quantifier expression"
   
-exists_ vr trm = do 
+-- exists 'pVariable' . 'pTerm'
+exists_ pVariable pTerm = do 
   reserved "exists"
   spaces
-  var <- vr
+  var <- pVariable
   spaces
   string "."
   spaces 
-  term <- trm
+  term <- pTerm
   return (exists var term)
   <?> "existential quantifier expression"
 
@@ -147,11 +167,10 @@ con  = choice
  [ agent 
  , patient 
  , goal
- , do
-   char '\"'
-   x <- many $ noneOf "\""
-   char '\"'
-   return (Con x (Atom "f"))
+ , do char '\"'
+      x <- many $ noneOf "\""
+      char '\"'
+      return (Con x (Atom "f"))
  , do
    x <- upper
    xs <- many $ alphaNum <|> oneOf "_'-"
@@ -170,9 +189,9 @@ con' = (do
    )
   <|>
   do
-   x <- oneOf "QWERTYUIOPASDFGHJKLZXCVBNM'" 
-   xs <- many $ oneOf "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm'"
-   return (Con (x:xs) Void)
+   x <- upper  
+   xs <- many $ upper <|> lower <|> char '\''
+   return (Var (x:xs))
    
    
 option trm = do 
@@ -181,7 +200,7 @@ option trm = do
   ; x <- trm   ; spaces
   ; string "," ; spaces
   ; f <- trm   ; spaces
-  ; comma      ; spaces
+  ; string "," ; spaces
   ; d <- trm   ; spaces
   ; string ")" 
   ; return (CaseO x f d)
@@ -229,7 +248,6 @@ for_all var term = Con "forall" ( (Atom "e" :-> Atom "t") :-> Atom "t") `App`  (
 exists  var term = Con "exists" ( (Atom "e" :-> Atom "t") :-> Atom "t") `App`  (Lam var term)
 
   
-  
 stringConcat a b = a .+ b
   
 
@@ -274,69 +292,6 @@ instance Tex Term where
   Case m l r ->  hcat [text"case(",tex m ,text", ",tex l,text",",tex r,text")"]
   CaseO m l r ->  hcat [text"caseO(",tex m ,text", ",tex l,text",",tex r,text")"]
 
-
-
-instance Show (Term) where
- show term = case term of
-  Nil ->  "*"
-  NotNil a -> concat [ show a ,"^"]
-  Var c ->  c
-
-  Con "Eps" (Atom "f") -> "_"
-
-  Con s (Atom "f") ->  show s
-  Con s _ ->  s    --  Con s t -> s  concat ["(", s  , " :: " ,  show t,")"]
-
-  App (App (Con "+" (Atom "f" :-> Atom "f" :-> Atom "f")) m) n ->  concat [show m , " + " , show n]
-  App (App (Con "And" (Atom "t" :-> Atom "t" :-> Atom "t")) m) n ->  concat [show m , " /\\ " , show n]
-  App (App (Con "Or" (Atom "t" :-> Atom "t" :-> Atom "t")) m) n ->  concat [show m , " \\/ " , show n]
-  App (Con "Not" (Atom "t" :-> Atom "t") ) m  ->  concat ["!",show m]  
-  
-  App (App (Con "AG" (Atom "e" :-> Atom "e" :-> Atom "t")) m) n ->  concat ["AG(",show m , "," , show n,")"]
-  App (App (Con "PAT" (Atom "e" :-> Atom "e" :-> Atom "t")) m) n ->  concat ["PAT(",show m , "," , show n,")"]
-  App (App (Con "GOAL" (Atom "e" :-> Atom "e" :-> Atom "t")) m) n ->  concat ["(GOAL ",show m , " " , show n,")"]  
-
-
-  App (Con "forall" ((Atom "e" :-> Atom "t") :-> Atom "t")) (Lam var term) -> concat ["forall ",var,".",show term]
-  App (Con "exists" ((Atom "e" :-> Atom "t") :-> Atom "t")) (Lam var term) -> concat ["exists ",var,".",show term]
-  
-  
- -- App (App f a) b ->  concat [show f , "(" , show a, "," , show b , ")" ]
-  
-  App m n ->  concat [show m ,"(", show n ,")"]
-  Pair m n ->  concat ["<", show m ,",", show n ,">"]
-  L m  ->  concat ["L ", show m,"" ]
-  R m  ->  concat ["R ", show m,"" ]
-  Lam v n -> concat ["\\",v,".", show n ,""]
-  Fst n -> concat ["fst " ,  show n ]
-  Snd n -> concat ["snd " ,  show n]
-  Case m l r -> concat ["case(",show m ,", ",show l,",",show r,")"]
-  CaseO m l r -> concat ["\\option(",show m ,", ",show l,",",show r,")"]
-
-
-
-texTerm "STRING" term = let tex' = texTerm "STRING" in case term of
-  Nil   -> text "\\ast"
-  NotNil a -> hcat [text "\\overline{ " , tex' a , text "}" ]
-  Var c -> text $ addPrimeIfUpperCase c
-  Con "" (Atom "f") -> text "\\epsilon"
-  Con x (Atom "f") -> hcat [text "\\str{" , tex  x , text "}" ]
-  Con x t -> hcat [tex x ,text "_{" ,  texStyle "STRING" t ,text"}" ]  
-  App (App (Con "+" (Atom "f" :-> Atom "f" :-> Atom "f")) a) b -> hsep [tex' a,text "\\bullet",tex' b]
-  App m n -> hsep $  [tex' m,parens $ tex' n]
-  Pair m n ->  hcat [text"\\langle", tex' m ,text ",", tex' n ,text"\\rangle"]
-  L m  ->   hcat [text"inl(", tex' m,text")" ]
-  R m  ->   hcat [text"inr(", tex' m,text")" ]
-  Lam v n ->  hcat[text" \\lambda ", tex $ addPrimeIfUpperCase v,text" . ", tex' n ,text" "]
-  Fst n ->  hcat [text"fst" , parens $  tex' n ]
-  Snd n ->  hcat [text"snd" , parens $ tex' n ]
-  Case m l r ->  hcat [text"case(",tex' m ,text", ",tex' l,text",",tex' r,text")"]
-  CaseO m l r ->  hcat [text"\\option(",tex' m ,text", ",tex' l,text",",tex' r,text")"]
-
-
-
-
-
 texTerm style@"SEM" term = let tex' = texTerm "SEM" in case term of
   Nil   -> text "\\ast"
   NotNil a -> hcat [text "\\overline{ " , tex' a , text "}" ]
@@ -371,7 +326,7 @@ texTerm style@"SEM" term = let tex' = texTerm "SEM" in case term of
   Fst n ->  hcat [text"fst" , parens $  tex' n ]
   Snd n ->  hcat [text"snd" , parens $ tex' n ]
   Case m l r ->  hcat [text"case(",tex' m ,text", ",tex' l,text",",tex' r,text")"]
-  CaseO m l r ->  hcat [text"\\option(",tex' m ,text", ",tex' l,text",",tex' r,text")"]
+  CaseO m l r ->  text "\\option(" <> tex' m <> text "\\hskip-3pt" <> narray [[text", ",tex' l,text",",tex' r,text")"]]
 
   
 texTerm n x = error $ "missing case in texTerm for "++ n ++" for " ++ show x
@@ -384,8 +339,8 @@ addPrimeIfUpperCase [c]
 addPrimeIfUpperCase x = x  
 
 
-
---hextend :: Term -> (Term -> a) -> a
+-- the homomorphic extension of a monadic function acting on constants
+hextendM :: Monad m => (Term -> m Term) -> Term -> m Term
 hextendM f term =  let cmap' = hextendM f in
  case term  of
   constant@(Con c t) -> f constant
