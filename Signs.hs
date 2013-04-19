@@ -3,21 +3,29 @@ import Commands
 import Interpreter
 import Parse
 import Control.Monad.Trans.State.Lazy
-import System.Console.Readline
-
+--import System.Console.
 import Data.Maybe
+import System.IO
+import Control.Monad
+
+
+promptLine :: String -> IO (Maybe String)
+promptLine prompt = do
+    putStr prompt
+    x <- getLine
+    return (if x =="" then Nothing else Just x)
 
 -- read evaluate print loop, passes interpreter state around
 repl :: InterpreterState -> IO ()
 repl prevState = do
-  { input   <- readline "> "
+  { input   <- promptLine ">" -- readline "> "
   ; case input of 
       Nothing      -> repl prevState  -- do nothing
       Just ":quit" -> return ()       -- quit
       Just ":q"    -> return ()
       Just line    -> do              
         newstate <- runStateT (processCommand $ line) prevState -- parse and execute the command
-        addHistory line
+        --addHistory line
         repl (snd newstate)           -- pass on the updated state
   }
 

@@ -17,7 +17,6 @@ data Sign = Sign
 instance Tex Sign where
   tex = typedTripleTex
 
-
 -- reduces all terms in a sign
 reduceSign (Sign a c) = Sign (reduce a) (map reduce c)
 
@@ -47,11 +46,11 @@ instance Parse Sign where parseDef = signParser
 signParser = do
   { abscon <- con
   ; reservedOp "="
-  ; conc <- tuple term
-  ; return (Sign abscon conc)
+  ; concretes <- tupleOf term
+  ; return (Sign abscon concretes)
   }
 
-tuple p = parseList (string "<") (do {ws ; p}) (do ws ; reservedOp "," ; ws) (ws >> string ">")
+tupleOf p = parseList (string "<") (do {ws ; p}) (do ws ; reservedOp "," ; ws) (ws >> string ">")
 
 -- combinator to parse signs like  content1 = < content2 .... >
 abstract_concrete p = abstract_concrete' p p
@@ -61,5 +60,5 @@ abstract_concrete' q p = do
   optional spaces
   reservedOp "="
   optional spaces
-  c <- tuple p
+  c <- tupleOf p
   return (a,c)

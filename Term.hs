@@ -1,13 +1,10 @@
 module Term  where
-
 {- 
 - lambda term ADT
 - parser
 - pretty printer
 - export to latex
 -}
-
-
 import Type
 import Tex
 import Prelude hiding (drop)
@@ -34,15 +31,13 @@ tests =
 
 type Variable = String
 
-constantName (Con s _) = s
-
 -- data type of terms
 infixl 9 `App`
 data Term
   -- basic
   = Var Variable
   | MetaVar  Variable 
-  | Con String Type
+  | Con { conName :: String , conType :: Type }
   | App (Term) (Term)
   | Lam Variable (Term)
   | MetaLam Variable (Term)  
@@ -58,7 +53,20 @@ data Term
   | Nil
   | NotNil (Term)
   | CaseO (Term) (Term) (Term)
-  deriving (Show,Ord,Eq)
+  deriving (Ord,Eq)
+
+
+instance Show Term where
+  show t = case t of
+    Var v -> v
+
+    (Con con (Atom "f")) -> concat ["\"",con,"\""]
+    (App (App (Con "+" _) m) n) ->  concat [show m ," ",show n]
+    (App (App (Con "And" _) m) n) ->  concat [show m ,"/\\",show n]
+
+    (Con con t) -> con
+    App m n -> concat ["(",show m," ",show n,")"]
+    Lam v b -> concat ["\\",v,".",show b]
 
 instance Parse Term where parseDef = term
 
@@ -73,7 +81,7 @@ term'   = buildExpressionParser termtable (simpleterm term' con')
 
 ident = identifier 
 
-var = liftM Var ident
+var = liftM Var (many1 lower)
 
 close :: Term -> Term
 close term = let 
@@ -128,7 +136,7 @@ variableParser = do
 lam :: Parser String -> Parser Term -> Parser Term
 lam pVar trm = do
   string "\\"
-  vars <- (sepBy1 variableParser (skipMany1 space)) -- lowercase string, separated by multiple spaces
+  vars <- (sepBy1 (variableParser) (skipMany1 space)) -- lowercase string, separated by multiple spaces
   string "."
   spaces
   body <- trm
@@ -191,8 +199,8 @@ con' = (do
   do
    x <- upper  
    xs <- many $ upper <|> lower <|> char '\''
-   return (Var (x:xs))
-   
+   --return (Var (x:xs))
+   return (Con (x:xs) Void)
    
 option trm = do 
   { reserved "option"

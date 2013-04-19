@@ -57,9 +57,9 @@ setFilename g s  = s {filename = Just g}
 
 
 run :: [Command] -> IO InterpreterState
-run commands  = interpret $ sequence_ $ map execute commands 
+run = interpret . sequence_ . map execute 
 
-run' commands  = sequence_ $ map execute commands 
+run' = sequence_ . map execute 
 
 testrun commands = run $ Load "opt.signs" : commands
 
