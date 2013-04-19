@@ -7,20 +7,20 @@ import Text.ParserCombinators.Parsec hiding ((<|>))
 
 -- This ADT defines the the command language for the interpreter
 data Command
-     = Load String
+     = Evaluate        Term
+     | Load String
      | Save            (Maybe FilePath)
      | TypeOf          Term
      | Reload
      | SaveTex         Term (Maybe FilePath)
      | SaveTexAll      (Maybe FilePath)     
-     | Evaluate        Term
      | Status
      | Echo String
      | Help
      | Unknown    
      | Listing String  -- show a listing, the arg serves as a filter
      deriving (Eq,Show)
-     
+
 helpmenu = 
   [ "Commands : "
   , "'term'                  \t : evalutate 'term' and display the result"
@@ -38,18 +38,18 @@ helpmenu =
 isCommand = (==':') . head  
 
 parseCommand :: Parser Command    
-parseCommand = 
-  (string ":" >> choice 
+parseCommand =  
+  ( (string ":" >> choice 
     [ parseTex    
     , parseSaveTex
     , parseTypeOf
     , parseReload
-    , parseLoad
+    , try parseLoad
     , parseListing 
     , string "status" >> return Status  
     , string "h" >> optional (string "elp")   >> return Help
-    ] <?> "command string")
-  <|> parseTerm
+    ] )
+  <|> parseTerm)
 
 parseReload = do
   { string "r"
@@ -74,18 +74,20 @@ parseTerm = do
   ; return (Evaluate term)
   }
 
-parseLoad = do
-  { string "l"
-  ; optional $ string "oad"
+on (h:t) =  do {
+  ; string (h:[])
+  ; optional $ string t
   ; string " "
+  }
+
+parseLoad = do
+  { on "load"
   ; name <- parseFileName "signs" 
   ; return (Load name)
   }
   
 parseSave = do
-  string "s"
-  optional $ string "ave"
-  string " "
+  on "save"
   maybeTarget <- optionMaybe $ do
       string " "
       parseFileName "signs"

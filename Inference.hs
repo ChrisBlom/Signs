@@ -29,6 +29,7 @@ import Prelude hiding ((^))
 import Data.Functor.Identity
 
 import Data.List
+import Data.Maybe
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
@@ -38,16 +39,15 @@ import Control.Monad.Error
 import Control.Monad.Reader
 import Control.Monad.State
 
-
-newtype TypeError = TypeError String
-instance Show TypeError where
+-- | new type to wrap error messages about typing
+newtype TypeError = TypeError { getString :: String } 
+instance Show TypeError where 
   show (TypeError t) = "type error: " ++ t
 instance Tex TypeError where
   tex = text . show
 instance Error TypeError where
   noMsg  = TypeError ""
   strMsg = TypeError
-
 
 -- checks if two types are unifiable
 unifiable a b = validSubst $ a `mgu` b 
@@ -65,26 +65,24 @@ typeOf term = case typeOfE term of
 
 -- returns the type of term, or an error message if the term is not well-typed
 typeOfE :: Term -> Either TypeError Type
-typeOfE term = case fst $ runTI (typeInference Map.empty term) of
-  Left  error -> Left $ TypeError error
-  Right typ   -> Right  $ typ
-
-data Scheme =  Scheme [Variable] (Type)
-
+typeOfE term = fst $ runTI $ (typeInference Map.empty term)
 -- Substitutions : mapping from variables to signatures
+
 type Subst = Map.Map Variable (Type)
 
--- | Type enviroments
-newtype TypeEnv = TypeEnv (Map.Map String (Scheme))
 
-class Types a  where
+
+class Typelike a  where
+    -- gets the set of free type variables
     ftv    ::  a -> Set.Set String
+    -- performs a substitution on a type, replacing variables with types
     doSub  ::  Subst -> a  -> a 
 
-instance  Types Type where
+-- Typelike are 
+instance  Typelike Type where
     ftv (TVar n)      =  Set.singleton n
     ftv (Atom _)      =  Set.empty
-    ftv ((:->) t1 t2) =  ftv t1 `Set.union` ftv t2
+    ftv (t1 :-> t2) =  ftv t1 `Set.union` ftv t2
     ftv (t1 :*: t2)   =  ftv t1 `Set.union` ftv t2  
     ftv (t1 :+: t2)   =  ftv t1 `Set.union` ftv t2      
     ftv (Option t1)   =  ftv t1
@@ -95,56 +93,55 @@ instance  Types Type where
                                Just t   -> t
     doSub s (t1 :-> t2)  = (doSub s t1) :-> (doSub s t2)
     doSub s (t1 :*: t2)  = (doSub s t1) :*: (doSub s t2)    
+    doSub s (t1 :+: t2)  = (doSub s t1) :+: (doSub s t2)    
     doSub s (Option t1)  = Option (doSub s t1) 
     doSub s (Marker t1 str )  = Marker (doSub s t1) str
     doSub s (Atom a)     = Atom a      
+    
     doSub s x            = error $ "missing case in doSub for " ++ show x
 
-instance Types Scheme  where
-    ftv (Scheme vars t)      =  (ftv t) `Set.difference` (Set.fromList vars)
+-- | Type enviroments 
+newtype TypeEnv = TypeEnv (Map.Map Variable (Scheme))
 
-    doSub s (Scheme vars t)  =  Scheme vars (doSub (foldr Map.delete s vars) t)
-
--- empty 
-nullSubst  ::  Subst 
-nullSubst  =   Map.empty
-
--- composition of substitutions
-composeSubst         :: Subst  -> Subst  -> Subst 
-composeSubst s1 s2   = (Map.map (doSub s1) s2) `Map.union` s1
-
-
-
-
-remove                    ::  TypeEnv -> Variable -> TypeEnv
-remove (TypeEnv env) var  =  TypeEnv (Map.delete var env)
-
-instance Types (TypeEnv  ) where
+instance Typelike (TypeEnv  ) where
     ftv (TypeEnv env)      =   foldr Set.union Set.empty (map ftv (Map.elems env) )
     doSub s (TypeEnv env)  =  TypeEnv (Map.map (doSub s) env)
 
-generalize        :: TypeEnv  -> (Type) -> Scheme
+
+data Scheme =  Scheme [Variable] (Type)
+
+instance Typelike Scheme  where
+    ftv (Scheme vars typ)      =  (ftv typ) `Set.difference` (Set.fromList vars)
+    doSub substitution (Scheme vars typ)  =  Scheme vars (doSub (foldr Map.delete substitution vars) typ)
+
+-- empty 
+nullSubst :: Subst 
+nullSubst  = Map.empty
+
+-- composition of substitutions
+composeSubst :: Subst  -> Subst  -> Subst 
+composeSubst s1 s2   = (Map.map (doSub s1) s2) `Map.union` s1
+
+remove ::  TypeEnv -> Variable -> TypeEnv
+remove (TypeEnv env) var  =  TypeEnv (Map.delete var env)
+
+generalize        :: TypeEnv  -> Type -> Scheme
 generalize env t  =   Scheme vars t
   where vars = Set.toList ((ftv t) `Set.difference` (ftv env))
 
-
-data TIEnv = TIEnv 
-
--- | data type for Type Inference state (variable bookkeeping and substitution)
 data TIState = TIState 
   { tiUsed   :: [Variable]
   , tiSubst  :: Subst
   }
 
--- initial TIState
+-- initial TIState : no variables used, no substitutions
 initTIState :: TIState
 initTIState = TIState {tiUsed = [] , tiSubst = Map.empty}
 
+-- Type Inference monad : error (TypeError) or state (fresh vars and subs) 
+type TI a  = ErrorT TypeError (State TIState) a
 
--- Type Inference monad : errors (strings) and state (fresh vars and subs) 
-type TI a  = ErrorT String (State TIState) a
-
-runTI :: TI a  -> (Either String a, TIState)
+runTI :: TI a  -> (Either TypeError a, TIState)
 runTI inferencer = runState (runErrorT inferencer) initTIState
 
 -- | get a fresh variable
@@ -156,17 +153,11 @@ newTyVar prefix =
         return (TVar freshVar)
    
 
-failer :: TI Subst
-failer = return nullSubst
-
-
-
 instantiate :: Scheme -> TI Type
 instantiate (Scheme vars t) = do
   nvars <- mapM (\ _ -> newTyVar "z") vars
   let s = Map.fromList (zip vars nvars)
   return $ doSub s t
-
 
 -- returns the most general unifier of two types
 mgu :: Type -> Type -> TI Subst
@@ -196,14 +187,14 @@ mgu t (TVar u)               =  varBind u t
 mgu (Atom x) (Atom y) | x == y  =  return nullSubst
 
 -- fail: 
-mgu t1 t2                    =  (throwError $ "types do not unify: \n expected \t: "  ++ show t1  ++
-                                " \n but got \t: "  ++  show t2 ++ "\n") 
+mgu t1 t2 = throwError . strMsg . concat $  
+  ["types do not unify: \n expected \t: ",show t1," \n but got \t: ",show t2,"\n"] 
 
 varBind :: Variable -> (Type) -> TI Subst
 varBind u t  | t == TVar u           =  return nullSubst
-             | u `Set.member` ftv t  =  throwError $ "occur check fails: " ++ u ++
-                                         " vs. "  ++ show t
+             | u `Set.member` ftv t  =  throwError . strMsg . concat $ ["occur check fails: ",u," vs. ",show t]
              | otherwise             =  return (Map.singleton u t)
+
 
 tiLit :: TypeEnv -> Term -> TI (Subst,Type) 
 tiLit _ (Con a t)   =  return (nullSubst, t)
@@ -212,9 +203,10 @@ tiLit _ (Con a t)   =  return (nullSubst, t)
 ti :: TypeEnv -> Term -> TI (Subst, Type)
 ti (TypeEnv env) (Var n) = 
     case Map.lookup n env of
-       Nothing     ->  (throwError $ "Inference.ti : unbound variable: " ++ n) 
-       Just sigma  ->  do  t <- instantiate sigma
-                           return (nullSubst, t) 
+       Nothing     ->  (throwError . strMsg $ "Inference.ti : unbound variable: " ++ n) 
+       Just sigma  ->  do t <- instantiate sigma
+                          return (nullSubst, t) 
+
 ti env (Con l t) = tiLit env (Con l t)  
 ti env (Lam n e) =
     do  tv <- newTyVar "z"
@@ -251,13 +243,10 @@ ti env (Snd e1) = do
   s2 <- mgu t (a :*: b)
   return (s2 `composeSubst` s1 , case doSub s2 t of (x :*: y) -> y )
 
-
-
 ti env (Nil) = do
   tv <- newTyVar "a"
   s3 <- mgu ( tv) ( tv)
   return ( s3 , Option tv)
-
 
 ti env (NotNil inner) = do
   tv <- newTyVar "a"
@@ -342,7 +331,7 @@ test :: (Term ) -> IO ()
 test e =
     do  let (res, _) = runTI (typeInference Map.empty e)
         case res of
-          Left err  ->  putStrLn $ "error while inferring types: " ++ err
+          Left err  ->  putStrLn $ "error while inferring types: " ++ getString err
           Right t   ->  putStrLn $ show e ++ " :: " ++ show t
           
 

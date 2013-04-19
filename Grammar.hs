@@ -158,7 +158,7 @@ addTypesToTerm sig term = let cmap' = addTypesToTerm sig  in
 getSignG :: String -> GrammarEnv ( Either ErrorMessage Sign )
 getSignG name = reader $
   maybeToError (\ _ -> concat ["error : no sign named ",name," could be found"]  ) id
-  . find ( (==name) . constantName . abstract)
+  . find ( (==name) . conName . abstract)
   . signs
 
 abstractTermToSignG :: Term -> GrammarEnv (Either ErrorMessage Sign)
