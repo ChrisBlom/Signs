@@ -1,7 +1,6 @@
 What is Abstract Categorial Grammar?
 
-Abstract Categorial Grammar (ACG) is a formal framework to define languages and relations between languages, 
-based on lambda calculus.
+Abstract Categorial Grammar (ACG) is a formal framework to define languages and relations between languages.
 
 ACG defines languages by a set of typed lambda terms, and relations between languages as
 mappings between such terms. This provides a very nice way of describing relations between syntax and semantics 
