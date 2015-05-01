@@ -1,4 +1,4 @@
-module Parse
+module Signs.Parse
   ( Parse
   , Parser(..)
   , parse
@@ -11,7 +11,7 @@ module Parse
   , reservedOp
   , reserved
   , string
-  , space  
+  , space
   , comma
   , optional
   , spaces
@@ -39,9 +39,7 @@ import Text.ParserCombinators.Parsec.Prim
 import Text.ParserCombinators.Parsec.Expr
 import Text.ParserCombinators.Parsec.Combinator
 
-
-
-fromRight (Right x) = x 
+fromRight (Right x) = x
 fromRight x = error $  "fromRight error : " ++ show x
 
 class Parse a where
@@ -82,18 +80,18 @@ ws = many (space <|> newline)
 
 parseList start elem sep end = do
   start
-  content <- parseCons elem (sep >> ws)  
+  content <- parseCons elem (sep >> ws)
   ws
-  end  
+  end
   return content
 
 
--- Build up a list of cells.  Try to parse the first cell, then figure out 
+-- Build up a list of cells.  Try to parse the first cell, then figure out
 -- what ends the cell.
 
 parseCons elem sep =
     do first <- elem
-       next <- parseNext elem sep 
+       next <- parseNext elem sep
        return (first : next)
 
 -- The cell either ends with a comma, indicating that 1 or more cells follow,
@@ -102,8 +100,8 @@ parseCons elem sep =
 parseNext elem sep =
     (sep >> parseCons elem sep )            -- Found comma?  More cells coming
     <|> (return [])                -- No comma?  Return [], no more cells
-    
-    
+
+
 -- The end of line character is \n
 eol :: GenParser Char st Char
 eol = newline
@@ -114,12 +112,9 @@ parseFileName :: String -> Parser String
 parseFileName defaultExtension = do
   name <- many1 ( alphaNum <|> char '.' <|> char '/' )
   maybeExt <- optionMaybe $
-              do { string "." 
-                 ; ext <- many1 alphaNum 
-                 ; return ext 
-                 } 
+              do { string "."
+                 ; ext <- many1 alphaNum
+                 ; return ext
+                 }
   return (name ++ (maybe ("."++defaultExtension) ("."++) maybeExt) )
   <?> "filename"
-    
-    
-

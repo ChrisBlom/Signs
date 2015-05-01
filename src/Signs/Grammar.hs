@@ -1,11 +1,11 @@
-module Grammar where
+module Signs.Grammar where
 
-import Sign
-import Term
-import Type
-import MyError
-import Inference
-import Reductions
+import Signs.Sign
+import Signs.Term
+import Signs.Type
+import Signs.MyError
+import Signs.Inference
+import Signs.Reductions
 import qualified Data.Map as Map
 import Data.List
 import Data.Maybe
@@ -14,12 +14,12 @@ import Control.Monad.Error
 import Control.Monad.State
 import Control.Monad.Reader
 import Text.PrettyPrint.HughesPJ
-import Tex
+import Signs.Tex
 import Data.Either
-import Control.Applicative 
+import Control.Applicative
 
 
-type SignName = String  
+type SignName = String
 
 data Grammar = Grammar
   { signatureNames :: (SigName,[SigName])
@@ -59,17 +59,17 @@ getAbstractSignature g = Signature
 
 -- builds a Signature by extracting all the req. info from a Grammer given SigName
 getSignature :: SigName -> Grammar -> Signature
-getSignature name g = 
+getSignature name g =
   let sigIndex = fromJust . elemIndex name . snd . signatureNames $ g
       extractConstant :: Term -> (String,Type)
-      extractConstant (Con name typ) = (name,typ) 
+      extractConstant (Con name typ) = (name,typ)
       getConstant sign = concretes sign !! sigIndex
   in Signature
     { sigName = name
     , constants = map (extractConstant . getConstant) (signs g)
     , basicTypes = nub $ map (\(Atom a) -> a) $ Map.keys (typemappings g)
-    } 
- 
+    }
+
 
 concatEithers :: [Either a b] -> ([a],[b])
 concatEithers eithers = (lefts eithers,rights eithers)
@@ -133,7 +133,7 @@ addTypesToConstantG (Con x _) sig = do
     Just i  ->  do { s <- sign ; return ( (asList s) !! i) }
     Nothing ->  Left $ "Signature '" ++ sig ++ "' is not defined."
   return sign'
-  
+
 -- Given a grammar, add types of Sig to a term
 addTypesToTerm :: SigName -> Term -> GrammarEnv (Either ErrorMessage Term)
 addTypesToTerm sig term = let cmap' = addTypesToTerm sig  in
@@ -184,19 +184,19 @@ typeCheckG constant concreteSig = do
    Left  error -> return $ Left $ show error
    Right typ -> return $ pp constant typ grammar concreteSig
 
-     
+
 -- maps a type and term to a signature, w.r.t grammar
 pp :: Term -> Type -> Grammar -> SigName -> Either ErrorMessage String
-pp term typ grammar concreteSig =      
+pp term typ grammar concreteSig =
   let concreteTerm  = (termHomomorphism grammar concreteSig) term
       maybeConcreteTypeA = (typeHomomorphism grammar concreteSig) typ
-  in case maybeConcreteTypeA of 
+  in case maybeConcreteTypeA of
     Just concreteTypeA | isRight concreteTerm ->
        let concreteTypeB = fromRight $ typeOfE $ fromRight concreteTerm in
         if concreteTypeB `unifiable` concreteTypeA
          then Right $ unwords [show term,"is correctly typed for the",concreteSig,"component."]
          else Right $ unwords ["found type\t\t",show concreteTypeB,"\n\t   but expected type\t",show concreteTypeA,"in",show concreteSig,"component of",show term]
-    _ -> Left $ "missing "++ concreteSig ++" term in " ++ show term   
+    _ -> Left $ "missing "++ concreteSig ++" term in " ++ show term
 
 typeCheckTermG :: Term -> GrammarEnv [Either ErrorMessage SuccesMessage]
 typeCheckTermG constant = do
@@ -208,7 +208,7 @@ typeCheckTermG constant = do
 typeCheckSigns = do
   constants <- reader $ (map abstract) . signs -- get the abstract terms of a grammar
   messages  <- mapM typeCheckTermG constants -- typecheck each term
-  return messages 
+  return messages
 
 
 validate g = map lefts $ runReader typeCheckSigns g
@@ -296,9 +296,9 @@ typeHomomorphism grammar targetSig sourceType=  let typeMap = typeHomomorphism g
   Unit        -> return Unit
   Void        -> return Void
 
-termHomomorphism :: Grammar -> SigName -> Term -> Either ErrorMessage Term  
+termHomomorphism :: Grammar -> SigName -> Term -> Either ErrorMessage Term
 termHomomorphism grammar targetSig sourceTerm =  hextendM (termMapping grammar targetSig) sourceTerm
-  
+
 termHomomorphismG sourceTerm targetSig  = do
   grammar <- ask
   return (termHomomorphism grammar targetSig sourceTerm )
@@ -307,38 +307,36 @@ termHomomorphismG sourceTerm targetSig  = do
 collectAbstractTypes :: Grammar -> [Sig Type]
 collectAbstractTypes g
   = let abstract = runReader getAbstractSig g in
-  [ assignSig abstract key | key <- (Map.keys . typemappings) g ] 
+  [ assignSig abstract key | key <- (Map.keys . typemappings) g ]
 
 collectConcreteTypes :: Grammar -> [[Sig Type]]
 collectConcreteTypes g = let sigs = snd $ signatureNames g in
-  [ zipWith assignSig sigs concretes  | concretes <- Map.elems $ typemappings g ] 
-  
+  [ zipWith assignSig sigs concretes  | concretes <- Map.elems $ typemappings g ]
 
 
-  
+
+
 -- pretty printing of signs
 instance Show Grammar where
   show grammar = concat $ intersperse "\n"
     [ "signatures " ++ (showTuple $ signatureNames grammar)
-    , ppTypeMappings $ typemappings grammar 
+    , ppTypeMappings $ typemappings grammar
     , concatMap (( ++ "\n") . show) $ signs grammar
     ]
 
 showTuple (abs,concs) = abs ++ " = " ++ (chevrons $ concat $ intersperse "," $ concs)
 
-ppTypeMappings mappings = concat 
+ppTypeMappings mappings = concat
   ["type_interpretations =\n"
-  , ppList [ concat 
-              [show abstractTerm," = ", chevrons $ concat $ intersperse "," $ map show concreteTerms] | (abstractTerm,concreteTerms) <- Map.toList mappings 
+  , ppList [ concat
+              [show abstractTerm," = ", chevrons $ concat $ intersperse "," $ map show concreteTerms] | (abstractTerm,concreteTerms) <- Map.toList mappings
            ]
   ]
-  where 
+  where
     ppList (h:t) = "\t[" ++ h ++ ppList' t
     ppList' [last] = "\n\t," ++ last ++ "]"
-    ppList' (h:t) = "\n\t," ++ h ++ ppList' t 
-  
-  
+    ppList' (h:t) = "\n\t," ++ h ++ ppList' t
+
+
 
 chevrons x = "<"++x++">"
-
-

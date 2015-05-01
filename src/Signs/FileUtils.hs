@@ -1,11 +1,11 @@
-module FileUtils where
+module Signs.FileUtils where
 
 import Control.Monad.State
 import Control.Monad
 
-import Sign
-import Grammar
-import GrammarParser
+import Signs.Sign
+import Signs.Grammar
+import Signs.GrammarParser
 import System.FilePath.Posix
 import System.Directory
 import Data.Maybe
@@ -49,7 +49,5 @@ prelude x = unlines
  ,"\\begin{document}"
  , x
  ,"\\end{document}"
- 
+
  ]
-
-

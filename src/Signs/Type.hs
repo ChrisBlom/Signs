@@ -1,8 +1,9 @@
-module Type where
+module Signs.Type where
 
-import Parse
+import Signs.Parse
+import Signs.Tex
+
 import Data.Char
-import Tex
 
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Expr
@@ -43,7 +44,7 @@ atom = liftM Atom identifier <?> "atomic type"
 
 
 
-isBoolean t = case t of 
+isBoolean t = case t of
   Atom "t" -> True
   _ :-> x  -> isBoolean x
   _        -> False
@@ -60,26 +61,26 @@ typetable = [ [postfix "?" Option ]
        --    ,  [binary "+"  (:+:) AssocLeft]
            ,  [binary "->" (:->) AssocRight ]
            ]
-           
+
 
 markedtype = do
-  typ <- simpletype 
-  maybeMarker <- optionMaybe $ (do 
-    { string "^{"         
+  typ <- simpletype
+  maybeMarker <- optionMaybe $ (do
+    { string "^{"
     ; marker <- many1 alphaNum <?> "marker string"
-    ; string "}"             
+    ; string "}"
     ; return marker
-    } <?> "marker")     
-  spaces  
-  return $ case maybeMarker of 
+    } <?> "marker")
+  spaces
+  return $ case maybeMarker of
     Just marker -> Marker typ marker
     Nothing -> typ
   where simpletype =  pparens typ
            <|> atom
            <?> "simple expression"
-  
-  
-(f .?. d) o = case o of 
+
+
+(f .?. d) o = case o of
   Just o' -> f o'
   Nothing -> d
 
@@ -92,7 +93,7 @@ instance Show Type where
     (a :*: b) -> sparens$ concat [show a , " * " , show b]
     (a :+: b) -> sparens$ concat [show a , " + " , show b]
     (Option a) -> concat [rankparens a $ show a , "?"]
-    (Marker a str) -> concat [rankparens a $ show a , "^{" , str , "}" ]    
+    (Marker a str) -> concat [rankparens a $ show a , "^{" , str , "}" ]
     Unit -> "1"
     Void -> "0"
     where rankparens x s = if isAtomic x then s else sparens s
@@ -101,13 +102,13 @@ instance Show Type where
 showAbbt t = case t of
     Atom a -> map toLower a
     TVar v -> map toUpper v
-    (a :-> b) -> if (isAtomic a) 
-      then concat [showAbbt a , showAbbt b] 
+    (a :-> b) -> if (isAtomic a)
+      then concat [showAbbt a , showAbbt b]
        else concat [sparens $ showAbbt a ,showAbbt b]
     (a :*: b) -> sparens$ concat [showAbbt a , "*" , showAbbt b]
     (a :+: b) -> sparens$ concat [showAbbt a , "+" , showAbbt b]
     (Option a) -> concat [rankparens a $ showAbbt a , "?"]
-    (Marker a str) -> concat [rankparens a $ showAbbt a , "{" , str , "}"]       
+    (Marker a str) -> concat [rankparens a $ showAbbt a , "{" , str , "}"]
     Unit -> "1"
     Void -> "0"
     where rankparens x s = if isAtomic x then s else sparens s
@@ -122,7 +123,7 @@ order typ = case typ of
   a :*: b     -> max (order a) (order b)
   a :+: b     -> max (order a) (order b)
   (Option a)  -> order a
-  (Marker a str)  -> order a  
+  (Marker a str)  -> order a
   Unit        -> 0
   Void        -> 0
 
@@ -131,47 +132,46 @@ isAtomic = atomicType
 
 
 at x = text "\\at{ " <> x <> text "}"
- 
+
 
 texStyle' "ABSTRACT" t = let ; tex' = texStyle' "ABSTRACT" in case t of
     Atom a -> string2tex a
     TVar v -> text $ map toLower $  v
-    (a :-> b) -> hsep [(if (atomicType a) then id else parens) $ tex' a, text "\\rightarrow" , tex' b] 
+    (a :-> b) -> hsep [(if (atomicType a) then id else parens) $ tex' a, text "\\rightarrow" , tex' b]
     (a :*: b) -> hsep [tex' a , text "\\otimes" , tex' b]
     (a :+: b) -> hsep [tex' a , text "\\oplus" , tex' b]
-    (Option a) -> hcat [tex' a ,text "^?"]            
-    (Marker a str ) -> hcat [tex' a ,text "^{\\at{" , text str ,text "}}"]       
-    Unit -> text $ "1" 
-    Void -> text $ "0"    
+    (Option a) -> hcat [tex' a ,text "^?"]
+    (Marker a str ) -> hcat [tex' a ,text "^{\\at{" , text str ,text "}}"]
+    Unit -> text $ "1"
+    Void -> text $ "0"
 
 texStyle "ABSTRACT" t = at $ texStyle' "ABSTRACT" t
-   
-  
+
+
 texStyle "SEM" t = let tex' = texStyle "SEM" in case t of
     Atom a -> string2tex $ map toLower a
     TVar v -> text $ map toLower $ v
-    (a :-> b) -> hcat [(if (atomicType a) then id else parens) $ tex' a, tex' b]  
+    (a :-> b) -> hcat [(if (atomicType a) then id else parens) $ tex' a, tex' b]
     (a :*: b) -> hsep [tex' a , text "\\otimes" , tex' b]
     (a :+: b) -> hsep [tex' a , text "\\oplus" , tex' b]
-    (Option a) -> hcat [tex' a ,text "^?"]       
-    (Marker a str ) -> hcat [tex' a ,text "^{\\at{" , text str , text "}}"]        
-    Unit -> text $ "1" 
-    Void -> text $ "0"     
+    (Option a) -> hcat [tex' a ,text "^?"]
+    (Marker a str ) -> hcat [tex' a ,text "^{\\at{" , text str , text "}}"]
+    Unit -> text $ "1"
+    Void -> text $ "0"
 
 texStyle "STRING" t = let tex' = texStyle "STRING" in case t of
     Atom x -> string2tex' x
     TVar v -> text $ map toLower $  v
-    (a :-> b) -> hcat [(if (atomicType a) then id else parens) $ tex' a, tex' b]  
+    (a :-> b) -> hcat [(if (atomicType a) then id else parens) $ tex' a, tex' b]
     (a :*: b) -> hsep [tex' a  , text "\\otimes" , tex' b]
     (a :+: b) -> hsep [tex' a  , text "\\oplus"  , tex' b]
-    (Option a) -> hcat [tex' a ,text "^?"]     
-    (Marker a str ) -> hcat [tex' a ,text "^{\\at{" ,text str , text "}}"]                   
-    Unit -> text $ "1" 
-    Void -> text $ "0"     
+    (Option a) -> hcat [tex' a ,text "^?"]
+    (Marker a str ) -> hcat [tex' a ,text "^{\\at{" ,text str , text "}}"]
+    Unit -> text $ "1"
+    Void -> text $ "0"
 
 
 string2tex' [] = text ""
 string2tex' ['f'] = text "\\smallf"
 string2tex' ('_':t) = hcat [text "_",tex '{' ,string2tex' t, tex '}']
 string2tex' (h:t)   = tex h <> string2tex' t
-

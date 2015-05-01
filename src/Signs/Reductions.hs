@@ -1,23 +1,23 @@
-module Reductions (reduce) where
+module Signs.Reductions (reduce) where
 
 {- In this module the various reduction operations for terms are defined
-   
+
    The only exported funciton is reduce, which reduces a term to its normal form.
-   
+
    The implemented reductions are:
-   
-   - Beta reduction     
-   - Option reduction   
+
+   - Beta reduction
+   - Option reduction
    - Sum reduction
    - Product reduction
-   
+
    Variable renaming and capture avoiding substitution (required for beta-reduction)
    are are used in beta reduction
  -}
- 
-import Term
 
-import Data.List 
+import Signs.Term
+
+import Data.List
 import Prelude hiding ((^))
 import qualified Data.Foldable as Fold
 
@@ -38,20 +38,20 @@ fixpoint f x
 
 -- reductions : applies one pass of the different reductions to a term.
 reductions :: Term -> Term
-reductions = foldr (.) id 
+reductions = foldr (.) id
   [ beta_reduce
   , projection_reduce
   , sum_reduce
   , option_reduce
   ]
- 
+
 -- disjointVars : ensure the variables in different scopes are disjoint
 disjointVars :: Term -> Term
 disjointVars term = case term of
-  (Case t l r) -> let overlap = intersect (vars l) (vars r) in 
+  (Case t l r) -> let overlap = intersect (vars l) (vars r) in
     Case t l (renameList overlap (fresh $ vars $ term) r)
-  Pair m n -> let overlap = intersect (vars m) (vars n) in 
-    Pair m (renameList overlap (fresh $ vars $ term) n)    
+  Pair m n -> let overlap = intersect (vars m) (vars n) in
+    Pair m (renameList overlap (fresh $ vars $ term) n)
   _ -> term
 
 -- fresh : generates a list of fresh variables from a list of used variables
@@ -64,17 +64,17 @@ vars term = case term of
   Con c t   -> []
   Var v       -> [v]
   Fst v       -> vars v
-  Snd v       -> vars v  
+  Snd v       -> vars v
   App  u s   -> vars u `union` vars s
   Pair u s   -> vars u `union` vars s
-  Lam x u    -> vars u 
+  Lam x u    -> vars u
   L x         -> vars x
   R y         -> vars y
   NotNil a    -> vars a
   Nil        -> []
-  CaseO m l r  -> foldr union [] $ map vars [m,l,r]  
+  CaseO m l r  -> foldr union [] $ map vars [m,l,r]
   Case m l r  -> foldr union [] $ map vars [m,l,r]
-  
+
 
 
 -- variable renaming
@@ -83,9 +83,9 @@ rename old new term = let rename' = rename old new  in case term of
   Var v      | v == old -> Var new
   Var v                 -> Var v
   Con c t                -> Con c t
-  Fst  m                -> Fst  (rename' m) 
-  Snd  m                -> Snd  (rename' m)   
-  Pair  m n             -> Pair (rename' m) (rename' n)  
+  Fst  m                -> Fst  (rename' m)
+  Snd  m                -> Snd  (rename' m)
+  Pair  m n             -> Pair (rename' m) (rename' n)
   App  m n              -> App  (rename' m) (rename' n)
   Lam x m | x == old    -> Lam new (rename' m)
   Lam y m               -> Lam y (rename' m)
@@ -110,18 +110,18 @@ subst old new term = let subst' = subst old new in case term of
   Lam y m | y /= old && y `notElem` free new -> Lam y (subst old new m)
   Lam y m | old /= y && y `elem` free new ->
       Lam y' (subst y (Var y') $ (rename y y' m)) where
-        y' = head $ fresh $ free term 
+        y' = head $ fresh $ free term
   App   m n  -> App  (subst' m) (subst' n)
   Pair  m n  -> Pair (subst' m) (subst' n)
-  Fst   n    -> Fst  (subst' n) 
-  Snd   n    -> Snd  (subst' n) 
-  Con s t -> Con s t 
+  Fst   n    -> Fst  (subst' n)
+  Snd   n    -> Snd  (subst' n)
+  Con s t -> Con s t
   L m  -> L $ subst' m
   R n  -> R $ subst' n
   Nil  -> Nil
   NotNil a -> NotNil (subst' a)
-  Case m l r  -> Case (subst' m) (subst' l) (subst' r)    
-  CaseO m l r  -> CaseO (subst' m) (subst' l) (subst' r)    
+  Case m l r  -> Case (subst' m) (subst' l) (subst' r)
+  CaseO m l r  -> CaseO (subst' m) (subst' l) (subst' r)
   _ -> error $ "missing case in 'subst' for " ++ show term
 
 
@@ -142,18 +142,18 @@ projection_reduce t = case t of
   NotNil a              -> NotNil (projection_reduce a)
   t@(Var v)             -> t
   t@(Con c x)             -> t
-  (Case  o f d)         -> Case  (projection_reduce o) (projection_reduce f) (projection_reduce d)  
+  (Case  o f d)         -> Case  (projection_reduce o) (projection_reduce f) (projection_reduce d)
   (CaseO o f d)         -> CaseO (projection_reduce o) (projection_reduce f) (projection_reduce d)
-  
-  
--- Reduction of options  
-option_reduce :: Term -> Term 
+
+
+-- Reduction of options
+option_reduce :: Term -> Term
 option_reduce t = case t of
   (CaseO (NotNil x) f d) -> App f x
   (CaseO Nil        f d) -> d
 
   (CaseO o f d)         -> CaseO (option_reduce o) (option_reduce f) (option_reduce d)
-  (Case  o f d)         -> Case  (option_reduce o) (option_reduce f) (option_reduce d)  
+  (Case  o f d)         -> Case  (option_reduce o) (option_reduce f) (option_reduce d)
   (App  m n)            -> App   (option_reduce m) (option_reduce n)
   (Lam v t)             -> Lam v (option_reduce t)
   (Fst x)       	      -> Fst   (option_reduce x)
@@ -165,13 +165,13 @@ option_reduce t = case t of
   NotNil a              -> NotNil (option_reduce a)
   t@(Var v)             -> t
   t@(Con c x)             -> t
-  
+
 sum_reduce :: Term -> Term
 sum_reduce t = case t of
   (Case (L x) f g)      -> App f x
-  (Case (R x) f g)      -> App g x    
+  (Case (R x) f g)      -> App g x
 
-  (Case  o f d)         -> Case  (sum_reduce o) (sum_reduce f) (sum_reduce d)  
+  (Case  o f d)         -> Case  (sum_reduce o) (sum_reduce f) (sum_reduce d)
   (L x)       	        -> L     (sum_reduce x)
   (R x)       	        -> R     (sum_reduce x)
 
@@ -200,6 +200,5 @@ beta_reduce term = case term of
   NotNil a              -> NotNil (beta_reduce a)
   t@(Var v)               -> t
   t@(Con c x)              -> t
-  (Case  o f d)         -> Case  (beta_reduce o) (beta_reduce f) (beta_reduce d)  
-  (CaseO o f d)         -> CaseO (beta_reduce o) (beta_reduce f) (beta_reduce d) 
-
+  (Case  o f d)         -> Case  (beta_reduce o) (beta_reduce f) (beta_reduce d)
+  (CaseO o f d)         -> CaseO (beta_reduce o) (beta_reduce f) (beta_reduce d)

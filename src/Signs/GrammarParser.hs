@@ -1,10 +1,10 @@
-module GrammarParser where
+module Signs.GrammarParser where
 
-import Sign
-import Inference
-import Grammar
-import Type
-import Parse
+import Signs.Sign
+import Signs.Inference
+import Signs.Grammar
+import Signs.Type
+import Signs.Parse
 import Prelude hiding (lines)
 import Text.ParserCombinators.Parsec hiding ((<|>))
 import System.IO.Unsafe
@@ -65,12 +65,12 @@ type_interpretations = do
   ; return  mappings
   } <?> "a type interpreation function definitions, of the form  [ 'abstract1' -> 'concrete1' , 'abstract2' -> concrete2' ]"
 
-  
+
 freely x = ospaces .>. x .>. ospaces
 
 freely2 x = ws .>. x .>. ws where
   ws = many (space <|> char '\n')
-  
+
 f .>. g = do { f ; g  ; return []}
 
 ospaces :: Parser String
@@ -79,8 +79,7 @@ ospaces = many (space <|> char '\n')
 
 lines = many (eol <|> space)
 signline =
-    do result <- (parseDef :: Parser Sign)   
+    do result <- (parseDef :: Parser Sign)
        many (char ' ')
        eol                       -- end of line
        return result
-

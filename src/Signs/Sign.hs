@@ -1,11 +1,11 @@
-module Sign (Type(..), Term(..),Sign(..),abstract_concrete,abstract_concrete',asList,reduceSign) where
+module Signs.Sign (Type(..), Term(..),Sign(..),abstract_concrete,abstract_concrete',asList,reduceSign) where
 
-import Type
-import Inference
-import Term
-import Reductions
-import Parse
-import Tex
+import Signs.Type
+import Signs.Inference
+import Signs.Term
+import Signs.Reductions
+import Signs.Parse
+import Signs.Tex
 import Data.List
 
 -- Sign datatype : an abstract term with multiple untyped concrete terms
@@ -21,8 +21,8 @@ instance Tex Sign where
 reduceSign (Sign a c) = Sign (reduce a) (map reduce c)
 
 -- Pretty prints a sign
-typedTripleTex (Sign absTerm [stringTerm,semTerm])  = case typeOfE $ reduce absTerm of 
-  Right absTyp -> array [ [ hcat [tex absTerm ,  text " : "  <> (texStyle "ABSTRACT" absTyp) , text " = "  ] ] , [pair]   ] 
+typedTripleTex (Sign absTerm [stringTerm,semTerm])  = case typeOfE $ reduce absTerm of
+  Right absTyp -> array [ [ hcat [tex absTerm ,  text " : "  <> (texStyle "ABSTRACT" absTyp) , text " = "  ] ] , [pair]   ]
     where pair =  array [string,semant]
           string = [text "\\langle" ,  texTerm "STRING" stringTerm  ]
           semant = [ text ","       ,  texTerm "SEM" semTerm  , text "\\rangle"]
@@ -31,8 +31,8 @@ typedTripleTex (Sign absTerm [stringTerm,semTerm])  = case typeOfE $ reduce absT
 asList (Sign a b) = a : b
 
 instance Show Sign where
- show s = concat 
-  [ case abstract s of 
+ show s = concat
+  [ case abstract s of
       constant@(Con s t) -> show constant ++ " :: " ++ show t
       x -> show x ++ " :: " ++ (case typeOfE x of Right typ -> show typ ; Left err -> show err)
   , " = \n\t< "

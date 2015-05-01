@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
-module Tex (tex,text,hcat,vcat,hsep,string2tex,Tex,parens,(<>),array,render,mathmode,enum,narray) where
+module Signs.Tex (tex,text,hcat,vcat,hsep,string2tex,Tex,parens,(<>),array,render,mathmode,enum,narray) where
 
-import Text.PrettyPrint.HughesPJ 
+import Text.PrettyPrint.HughesPJ
 import Data.List
 
 
@@ -27,7 +27,7 @@ string2tex (h:t)   = tex h <> string2tex t
 
 
 mathmode x = tex "$" <> x <> tex "$"
-  
+
 sf x = hcat [tex "{" , text "\\sf " , x , tex "}"]
 
 enum :: [Doc ] -> Doc
@@ -35,19 +35,19 @@ enum list = vcat $ [text "\\begin{enumerate}"] ++ map item list ++ [text "\\end{
 item x = text "\\item " <>  x
 
 array :: [ [Doc] ] -> Doc
-array list = vcat $ 
-  [hcat [text "\\begin{array}[t]{" ,tex $ take (foldr max 0 $ map length list) (repeat 'l') ,tex "}"]] 
-   ++ 
-   map arrayentry list 
-   ++ 
+array list = vcat $
+  [hcat [text "\\begin{array}[t]{" ,tex $ take (foldr max 0 $ map length list) (repeat 'l') ,tex "}"]]
+   ++
+   map arrayentry list
+   ++
    [text "\\end{array}"]
-   
+
 narray :: [ [Doc] ] -> Doc
-narray list = vcat $ 
-  [hcat [text "\\begin{array}[t]{" ,tex $ concat $ take (foldr max 0 $ map length list) (repeat "l@{}") ,tex "}"]] 
-   ++ 
-   map arrayentry list 
-   ++ 
+narray list = vcat $
+  [hcat [text "\\begin{array}[t]{" ,tex $ concat $ take (foldr max 0 $ map length list) (repeat "l@{}") ,tex "}"]]
+   ++
+   map arrayentry list
+   ++
    [text "\\end{array}"]
 
 arrayentry x = hsep $ (++ [tex "\\\\"] ) $ intersperse (tex "&") x

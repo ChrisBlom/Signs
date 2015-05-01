@@ -1,13 +1,11 @@
-
-import Commands
-import Interpreter
-import Parse
+import Signs.Commands
+import Signs.Interpreter
+import Signs.Parse
 import Control.Monad.Trans.State.Lazy
 --import System.Console.
 import Data.Maybe
 import System.IO
 import Control.Monad
-
 
 promptLine :: String -> IO (Maybe String)
 promptLine prompt = do
@@ -19,11 +17,11 @@ promptLine prompt = do
 repl :: InterpreterState -> IO ()
 repl prevState = do
   { input   <- promptLine ">" -- readline "> "
-  ; case input of 
+  ; case input of
       Nothing      -> repl prevState  -- do nothing
       Just ":quit" -> return ()       -- quit
       Just ":q"    -> return ()
-      Just line    -> do              
+      Just line    -> do
         newstate <- runStateT (processCommand $ line) prevState -- parse and execute the command
         --addHistory line
         repl (snd newstate)           -- pass on the updated state
@@ -46,4 +44,4 @@ welcome = mapM_ putStrLn
  ,""
  ,"enter :help to list the available commands."
  ,""
- ] 
+ ]

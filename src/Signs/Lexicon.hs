@@ -1,10 +1,10 @@
-module Lexicon where
+module Signs.Lexicon where
 
-import Parse
-import Term
-import Type
-import Reductions
-import Inference
+import Signs.Parse
+import Signs.Term
+import Signs.Type
+import Signs.Reductions
+import Signs.Inference
 
 import Text.ParserCombinators.Parsec hiding (option)
 import Text.ParserCombinators.Parsec.Expr
@@ -31,8 +31,8 @@ lexicon :: Parser Lexicon
 lexicon = do
      more  <- many1 entryline
      return $ Lexicon (more)
-     
-     
+
+
 test2 = (fromRight $ parse term "" "(Read :: e -> e -> t)" ,fromRight $ parse typ ""  "e^{opt} -> e -> t" )
 test3 = (fromRight $ parse term "" "(Read :: e -> e -> t)" ,fromRight $ parse typ ""  "e -> e^{opt} -> t" )
 
@@ -41,20 +41,20 @@ close :: (Term,Type) -> (Term,Type)
 -- TODO : flip application order in close
 close (tr,ty) = let fv = nextFreshVar tr in  case (tr,ty) of
   ( term ,  a :-> (Atom "t") ) ->  ( exists fv $ term `App` (Var fv) , Atom "t" )
-  ( term ,  a :-> b :-> c )    ->  let (closedTerm,closedTyp) = close (term `App` (Var fv)  , b :-> c ) in 
-                                   ( Lam fv $ closedTerm    , a :-> closedTyp  ) 
+  ( term ,  a :-> b :-> c )    ->  let (closedTerm,closedTyp) = close (term `App` (Var fv)  , b :-> c ) in
+                                   ( Lam fv $ closedTerm    , a :-> closedTyp  )
 
 
 optionalize x = case  x of
   (term                         , typ ) | markerless typ  -> (term,typ)
 
   (term                         , Marker arg "opt" :-> res )  -> ( Lam "x'" $ CaseO (Var "x'") (term) (fst . close $ (term,arg:->res))         , Option arg :-> res )
-  
+
   (term                         , arg :-> res ) | markerless res  -> (term,arg :-> res)
-  
+
   (term                         , arg  :-> res )  -> let (resTerm,resTyp) = optionalize (term `App` (Var "fv") , res) in
                                                      (Lam "fv" resTerm , arg:->resTyp )
-  
+
 
   x -> error . ("no case for " ++) . show $ x
 
@@ -70,10 +70,10 @@ instance Show LexEntry where
 
 test p x = runParser p () "" x
 
-spaced f = do 
+spaced f = do
   spaces
   res <- f
-  spaces 
+  spaces
   return res
 
 entryline = do
