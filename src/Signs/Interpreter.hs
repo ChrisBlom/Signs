@@ -13,8 +13,10 @@ import Signs.Reductions
 import Signs.MyError
 import Signs.Commands
 import Signs.Tex
-import Control.Monad.Error
+
+import Control.Monad.Except
 import Control.Monad.Reader
+
 import Data.Maybe
 import Data.Either
 

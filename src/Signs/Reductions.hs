@@ -131,13 +131,13 @@ projection_reduce t = case t of
   (Fst (Pair l r))      -> l
   (Snd (Pair l r))      -> r
 
-  (Fst x)       	      -> Fst   (projection_reduce x)
-  (Snd x)       	      -> Snd   (projection_reduce x)
+  (Fst x)               -> Fst   (projection_reduce x)
+  (Snd x)               -> Snd   (projection_reduce x)
   (Pair m n)            -> Pair  (projection_reduce m) (projection_reduce n)
   (App  m n)            -> App   (projection_reduce m) (projection_reduce n)
   (Lam v t)             -> Lam v (projection_reduce t)
-  (L x)       	        -> L     (projection_reduce x)
-  (R x)       	        -> R     (projection_reduce x)
+  (L x)                 -> L     (projection_reduce x)
+  (R x)                 -> R     (projection_reduce x)
   Nil                   -> Nil
   NotNil a              -> NotNil (projection_reduce a)
   t@(Var v)             -> t
@@ -156,11 +156,11 @@ option_reduce t = case t of
   (Case  o f d)         -> Case  (option_reduce o) (option_reduce f) (option_reduce d)
   (App  m n)            -> App   (option_reduce m) (option_reduce n)
   (Lam v t)             -> Lam v (option_reduce t)
-  (Fst x)       	      -> Fst   (option_reduce x)
-  (Snd x)       	      -> Snd   (option_reduce x)
+  (Fst x)               -> Fst   (option_reduce x)
+  (Snd x)               -> Snd   (option_reduce x)
   (Pair m n)            -> Pair  (option_reduce m) (option_reduce n)
-  (L x)       	        -> L     (option_reduce x)
-  (R x)       	        -> R     (option_reduce x)
+  (L x)                 -> L     (option_reduce x)
+  (R x)                 -> R     (option_reduce x)
   Nil                   -> Nil
   NotNil a              -> NotNil (option_reduce a)
   t@(Var v)             -> t
@@ -172,18 +172,18 @@ sum_reduce t = case t of
   (Case (R x) f g)      -> App g x
 
   (Case  o f d)         -> Case  (sum_reduce o) (sum_reduce f) (sum_reduce d)
-  (L x)       	        -> L     (sum_reduce x)
-  (R x)       	        -> R     (sum_reduce x)
+  (L x)                 -> L     (sum_reduce x)
+  (R x)                 -> R     (sum_reduce x)
 
   (App  m n)            -> App   (sum_reduce m) (sum_reduce n)
   (Lam v t)             -> Lam v (sum_reduce t)
-  (Fst x)       	      -> Fst   (sum_reduce x)
-  (Snd x)       	      -> Snd   (sum_reduce x)
+  (Fst x)               -> Fst   (sum_reduce x)
+  (Snd x)               -> Snd   (sum_reduce x)
   (Pair m n)            -> Pair  (sum_reduce m) (sum_reduce n)
   Nil                   -> Nil
   NotNil a              -> NotNil (sum_reduce a)
   t@(Var v)             -> t
-  t@(Con c x)             -> t
+  t@(Con c x)           -> t
   (CaseO o f d)         -> CaseO (sum_reduce o) (sum_reduce f) (sum_reduce d)
 
 beta_reduce :: Term -> Term
@@ -191,14 +191,14 @@ beta_reduce term = case term of
   (App  l@(Lam x t) u)  -> subst x u t
   (App  m n)            -> App   (beta_reduce m) (beta_reduce n)
   (Lam v t)             -> Lam v (beta_reduce t)
-  (Fst x)       	      -> Fst   (beta_reduce x)
-  (Snd x)       	      -> Snd   (beta_reduce x)
+  (Fst x)               -> Fst   (beta_reduce x)
+  (Snd x)               -> Snd   (beta_reduce x)
   (Pair m n)            -> Pair  (beta_reduce m) (beta_reduce n)
-  (L x)       	        -> L     (beta_reduce x)
-  (R x)       	        -> R     (beta_reduce x)
+  (L x)                 -> L     (beta_reduce x)
+  (R x)                 -> R     (beta_reduce x)
   Nil                   -> Nil
   NotNil a              -> NotNil (beta_reduce a)
-  t@(Var v)               -> t
-  t@(Con c x)              -> t
+  t@(Var v)             -> t
+  t@(Con c x)           -> t
   (Case  o f d)         -> Case  (beta_reduce o) (beta_reduce f) (beta_reduce d)
   (CaseO o f d)         -> CaseO (beta_reduce o) (beta_reduce f) (beta_reduce d)

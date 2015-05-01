@@ -53,9 +53,9 @@ defs = emptyDef { commentStart   = "/*"
                 , commentLine    = "//"
                 , nestedComments = True
                 , identStart     = lower
-                , identLetter	 = alphaNum <|> oneOf "_'"
-                , opStart	 = opLetter defs
-                , opLetter	 = oneOf "->\\/+"
+                , identLetter    = alphaNum <|> oneOf "_'"
+                , opStart        = opLetter defs
+                , opLetter       = oneOf "->\\/+"
                 , reservedOpNames= ["->","+","/\\@","=",":"]
                 , reservedNames  = words "\\ option forall id exists OPT DEOPT :: PAT AG GOAL TRUE FALSE"
                 , caseSensitive  = True

@@ -21,10 +21,11 @@ Based on descriptions and code found in:
 
 -}
 
+import Prelude hiding ((^))
+
 import Signs.Tex
 import Signs.Term
 import Signs.Type
-import Prelude hiding ((^))
 
 import Data.Functor.Identity
 
@@ -35,19 +36,17 @@ import qualified Data.Set as Set
 
 import Data.Monoid
 import System.IO.Unsafe
-import Control.Monad.Error
+import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
 
 -- | new type to wrap error messages about typing
 newtype TypeError = TypeError { getString :: String }
+
 instance Show TypeError where
   show (TypeError t) = "type error: " ++ t
 instance Tex TypeError where
   tex = text . show
-instance Error TypeError where
-  noMsg  = TypeError ""
-  strMsg = TypeError
 
 -- checks if two types are unifiable
 unifiable a b = validSubst $ a `mgu` b
@@ -56,7 +55,6 @@ validSubst result = let (x,state) = runTI result in
   case x of
     Right _  -> True
     Left err -> False
-
 
 typeOf :: Term -> Maybe Type
 typeOf term = case typeOfE term of
@@ -69,8 +67,6 @@ typeOfE term = fst $ runTI $ (typeInference Map.empty term)
 -- Substitutions : mapping from variables to signatures
 
 type Subst = Map.Map Variable (Type)
-
-
 
 class Typelike a  where
     -- gets the set of free type variables
@@ -139,10 +135,10 @@ initTIState :: TIState
 initTIState = TIState {tiUsed = [] , tiSubst = Map.empty}
 
 -- Type Inference monad : error (TypeError) or state (fresh vars and subs)
-type TI a  = ErrorT TypeError (State TIState) a
+type TI a  = ExceptT TypeError (State TIState) a
 
 runTI :: TI a  -> (Either TypeError a, TIState)
-runTI inferencer = runState (runErrorT inferencer) initTIState
+runTI inferencer = runState (runExceptT inferencer) initTIState
 
 -- | get a fresh variable
 newTyVar :: String -> TI Type
@@ -187,12 +183,12 @@ mgu t (TVar u)               =  varBind u t
 mgu (Atom x) (Atom y) | x == y  =  return nullSubst
 
 -- fail:
-mgu t1 t2 = throwError . strMsg . concat $
+mgu t1 t2 = throwError . TypeError . concat $
   ["types do not unify: \n expected \t: ",show t1," \n but got \t: ",show t2,"\n"]
 
 varBind :: Variable -> (Type) -> TI Subst
 varBind u t  | t == TVar u           =  return nullSubst
-             | u `Set.member` ftv t  =  throwError . strMsg . concat $ ["occur check fails: ",u," vs. ",show t]
+             | u `Set.member` ftv t  =  throwError . TypeError. concat $ ["occur check fails: ",u," vs. ",show t]
              | otherwise             =  return (Map.singleton u t)
 
 
@@ -203,7 +199,7 @@ tiLit _ (Con a t)   =  return (nullSubst, t)
 ti :: TypeEnv -> Term -> TI (Subst, Type)
 ti (TypeEnv env) (Var n) =
     case Map.lookup n env of
-       Nothing     ->  (throwError . strMsg $ "Inference.ti : unbound variable: " ++ n)
+       Nothing     ->  (throwError . TypeError $ "unbound variable: " ++ n)
        Just sigma  ->  do t <- instantiate sigma
                           return (nullSubst, t)
 
@@ -292,14 +288,10 @@ typeInference env e =
     do  (s, t) <- ti (TypeEnv env) e
         return (doSub s t)
 
-
-
 data Constraint
   = CEquivalent (Type) (Type)
   | CExplicitInstance (Type) (Scheme)
   | CImplicitInstance (Type) (Set.Set Variable) (Type)
-
-
 
 type Assum = [(String,Type)]
 type CSet =  [Constraint]
@@ -325,7 +317,6 @@ bu m (Lam x body) =
 removeAssum [] _ = []
 removeAssum ((n', _) : as) n | n == n' = removeAssum as n
 removeAssum (a:as) n = a : removeAssum as n
-
 
 test :: (Term ) -> IO ()
 test e =

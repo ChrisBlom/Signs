@@ -10,7 +10,7 @@ import qualified Data.Map as Map
 import Data.List
 import Data.Maybe
 import Control.Monad
-import Control.Monad.Error
+import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Reader
 import Text.PrettyPrint.HughesPJ

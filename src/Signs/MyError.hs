@@ -1,7 +1,7 @@
 module Signs.MyError where
 
 import Data.Either
-import Control.Monad.Error
+import Control.Monad.Except
 import Control.Applicative
 
 maybeToError msg f x = case x of
