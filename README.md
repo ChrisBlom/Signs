@@ -19,7 +19,7 @@ Start the interpreter:
 
 Load a grammar:
 
-    :l opt.signs
+    :l opt
 
 Interpret a sign:
 
